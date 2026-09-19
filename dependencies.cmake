@@ -1,0 +1,8 @@
+find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(fmt REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(nova REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(GTest REQUIRED)
+find_package(benchmark REQUIRED)

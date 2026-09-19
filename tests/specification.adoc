@@ -1,0 +1,26 @@
+= Baldr Test Specification
+
+== Test suites
+
+The script `run.sh` is the runner for all test suites.
+
+=== Smoke tests
+
+**Script**: `smoke.sh`
+
+**Description**: Calls Baldr with various CLI arguments smoke testing features.
+
+=== Building in Docker image
+
+**Script**: `glibc.sh`
+
+**Description**: Builds a Docker image (`glibc.Dockerfile`) with an older GLIBC
+version and uses that image to build a test project. The built target can be
+run on the host natively.
+
+=== Statically linking Baldr
+
+**Script**: `static-link.sh`
+
+**Description**: Builds and statically links Baldr, packages into an alpine
+image and runs Baldr (calling `--version`).

@@ -1,0 +1,16 @@
+[requires]
+fmt/12.1.0
+boost/1.87.0
+nlohmann_json/3.11.3
+spdlog/1.17.0
+yaml-cpp/0.8.0
+gtest/1.14.0
+benchmark/1.8.3
+
+[options]
+fmt/*:header_only=True
+spdlog/*:header_only=True
+
+[generators]
+CMakeDeps
+CMakeToolchain

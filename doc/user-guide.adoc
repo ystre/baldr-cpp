@@ -1,0 +1,73 @@
+= Baldr User Guide
+
+== Running the built target
+
+`baldr run` automatically discovers the built executables. Baldr looks for an
+executable with the same name as the taget.
+
+The discovery mechanism is slightly different depending on the project type.
+
+* CMake projects: recursively looks in the tree under `build/<build_type>`.
+* Make projects: looks directly in `build`. No support for build types.
+
+== Using a container
+
+`-i/--image <image>` on `build` or `run` re-executes the equivalent Baldr
+invocation inside a fresh container of `<image>` instead of running it on
+the host:
+
+* The resolved project directory is mounted to `/workspace` inside the
+  container, and the container-side invocation uses `--project /workspace`.
+* Baldr's own binary is mounted in (read-only, to `/usr/local/bin/baldr`) and
+  used as the container-side `baldr`, so the image doesn't need to bundle its
+  own copy. Set `docker.mount-baldr: false` in `.baldr.yaml` if the image
+  already provides one; `docker.baldr-path` overrides the host path that gets
+  mounted (default: the running `baldr` binary itself, via `/proc/self/exe`).
+* The container process runs as the host's `uid:gid`, so files written into
+  the mounted project directory (build output, generated files) end up
+  owned by the same user as on the host.
+
+The target image must already have the project's toolchain (compilers,
+CMake, etc.) installed — `--image` does not provision one.
+
+== Signal handling
+
+Baldr has a special signal handling for interrupts (`SIGINT`).
+
+=== How it affects Baldr itself
+
+By default, hitting Ctrl-C would simply kill Baldr on the spot, wherever it
+happened to be — mid-build, mid-configure, or while a `run` target was still
+starting up. Baldr instead catches `SIGINT` so it can actually wait for
+whatever it spawned (`cmake`, `make`, or your `run` target) to finish before
+it, in turn, exits itself.
+
+Practically, this means:
+
+* Pressing Ctrl-C once tells Baldr (and, in most cases, the process it
+  spawned — see below) to stop. Baldr keeps running until that process has
+  actually exited, then reports what happened and exits itself with the
+  conventional signal-terminated status (130), so scripts and shells see the
+  interruption the same way they would for any other Ctrl-C'd command.
+* Baldr does not treat this as a failure. A build or run interrupted by
+  Ctrl-C is reported as interrupted, not as a build failure — you won't see
+  a misleading "Build failed" message for something you did on purpose.
+* Pressing Ctrl-C a third time force-kills the process Baldr is waiting on
+  (see below) — a safety valve for the case where the first press didn't
+  make it stop.
+
+=== How it affects children
+
+When you Ctrl-C Baldr while it's running `cmake`, `make`, or your `run`
+target, that child process normally receives the same `SIGINT` directly
+from your terminal (it shares Baldr's process group) and shuts down on its
+own — Baldr just waits for it and reports its outcome instead of abandoning
+it.
+
+Some children don't stop on the first `SIGINT` — most notably a debuggee
+running under `--debug` (e.g. via `gdb`), where Ctrl-C is commonly used to
+*pause* execution rather than terminate it. For cases like this, hitting
+Ctrl-C a third time force-kills the child directly (`SIGKILL`), so Baldr
+never hangs indefinitely waiting on something that isn't going to exit on
+its own. The first two presses are a "please stop" that gives the child a
+chance to shut down cleanly; the third is unconditional.

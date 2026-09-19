@@ -1,0 +1,261 @@
+= Developer's Manual
+
+== Child process output: `command::pty`
+
+`utl::command` streams a non-interactive child's combined stdout/stderr
+through `poll()`. That channel is a pseudo-terminal (`command::pty`), not a
+plain `pipe(2)`.
+
+=== Why a pty instead of a pipe
+
+A pipe is the obvious choice and was the original implementation, but it has
+a side effect most CLI tools actively work around: `isatty()` on a pipe fd
+returns false, and compilers, build systems, and test runners (`gcc`/`clang`,
+`cmake`, `ninja`, `ctest`, `git`, ...) treat that as "output is being
+redirected to a file" and disable their own ANSI coloring accordingly — not
+because Baldr strips colors, but because the child never emits them in the
+first place. Swapping the pipe for a pty makes `isatty()` succeed in the
+child (and in anything it in turn `exec`s or forks, since the slave fd is
+inherited the same way a pipe fd would be), so tools keep coloring their
+output as if they were run directly in a terminal. `poll()` hands those bytes
+back completely unprocessed — Baldr does not recolor, strip, or otherwise
+interpret them; see `nxs::rlog::window` in `libnxs/rlog.cpp` for how the
+scrolling-window sink logs/replays them as-is rather than imposing its own
+color.
+
+The `pipe` class is still used for the separate exec-failure-reporting
+channel (`m_error_pipe`) — that one only ever carries a raw `errno` between
+processes, never anything meant to be displayed, so none of the above
+applies to it.
+
+=== Design notes
+
+* The child calls `setsid()` before opening the pty slave, so it lands in a
+  new session rather than keeping Baldr's own controlling terminal. Opening
+  a pty slave from a session leader with no controlling terminal makes that
+  pty the new controlling terminal automatically (standard SysV pty
+  semantics) — deliberately so, rather than leaving the child attached to
+  whatever terminal is running Baldr itself.
+* This does *not* rely on terminal-driven signal delivery for Ctrl-C — that
+  path is already handled explicitly via `signal_handler::watch()` forwarding
+  `SIGINT` straight to the child's PID (see "Signal handling" below).
+  `setsid()` only changes which terminal the child is attached to, not how
+  it's signaled.
+* A pty master reports "child side gone" differently from a pipe: reading
+  past the last slave close fails with `EIO` rather than returning `0`.
+  `poll()` doesn't special-case this — its existing `n <= 0` check already
+  treats any negative return the same as a clean EOF, so both channel types
+  fall out of the same code path.
+* A freshly opened pty starts with a `0x0` winsize, which some tools use to
+  decide column widths for wrapping/summaries. `pty`'s constructor queries
+  Baldr's own real terminal size (`ioctl(STDOUT_FILENO, TIOCGWINSZ, ...)`,
+  the same call `nxs::tty::terminal_width()` makes) and forwards it via
+  `TIOCSWINSZ`, so the child wraps/truncates its own output at the width
+  it'll actually be shown at in Baldr's live progress view. When Baldr's own
+  stdout isn't a real terminal (redirected to a file, CI, ...), that query
+  fails and it falls back to a fixed, generously wide default (`200x50`)
+  instead of whatever narrow width a fallback would otherwise suggest —
+  there's nothing live to match in that case, and an arbitrarily narrow
+  width would just wrap the child's output for no one to see. The queried
+  size is a one-time snapshot at pty creation, not kept in sync with actual
+  terminal resizes over the run — that would need `SIGWINCH` forwarding to
+  the child, deliberately left out for now: the existing `signal_handler`
+  is built around the count-then-escalate kill policy, not a fit for
+  relaying an arbitrary struct on delivery, and several tools (`gcc`,
+  `cmake`) cache the width once at startup and wouldn't react to a live
+  update anyway.
+* `command::pty` is unconditionally constructed as a data member (it always
+  opens a master fd), even when `interactive` is true and the channel goes
+  unused — mirroring the pre-existing `pipe m_pipe` member it replaced. This
+  is an accepted, pre-existing pattern here, not something newly introduced.
+
+=== Pitfalls if you touch this code
+
+* `posix_openpt`/`grantpt`/`unlockpt`/`ptsname_r` are POSIX/glibc, not
+  portable to non-Linux/BSD targets without an alternate code path — fine
+  given Baldr only targets Linux today, but don't assume it'll compile
+  unchanged if that ever expands.
+* If a child spawns a grandchild that inherits the pty slave fd and outlives
+  the immediate child (e.g. something explicitly daemonized), `poll()` won't
+  see `EIO` until *that* fd is also closed — the same "reader blocks past
+  the process you actually care about" hazard a pipe has with a lingering
+  writer, not a new one introduced by the pty.
+* Don't reintroduce the removed `::close(m_pipe.write())` step from `run()`
+  for the pty case — there's no parent-side duplicate of the slave fd to
+  close; the child closes its own master copy in `redirect_child()` before
+  `execvp()`.
+
+== Signal handling
+
+The abstractions live in `libutl/signal.hpp`: `utl::signal_guard` and
+`utl::signal_handler`. They're deliberately two separate types — read
+<<why-two-types>> before reaching for either.
+
+=== The abstractions
+
+`signal_guard` is a generic, RAII `sigaction(2)` installer. It knows nothing
+about counting deliveries or escalation; it just swaps in a plain
+`void(int)` handler and restores whatever disposition was there before once
+it goes out of scope. Constructing a second guard for a signal number that
+already has one installed throws, rather than silently clobbering the first
+guard's "previous disposition" bookkeeping.
+
+`signal_handler` is a ready-made handler policy — "count deliveries for a
+given signal, optionally escalate to one of a closed set of actions once a
+threshold is reached" — installable *through* `signal_guard`:
+
+[source,cpp]
+----
+auto sigint = utl::signal_guard{ SIGINT, &utl::signal_handler::handle };
+----
+
+All of `signal_handler`'s state is static and keyed by signal number, not
+tied to any particular `signal_guard` instance:
+
+[source,cpp]
+----
+utl::signal_handler::triggered(SIGINT);              // deliveries so far
+utl::signal_handler::watch(SIGINT, child_pid);        // arm force-kill
+utl::signal_handler::scoped_watch{ SIGINT, child_pid }; // RAII form
+----
+
+Baldr uses this to wait out a spawned child (`cmake`, `make`, the `run`
+target) instead of dying on the first Ctrl-C: `main.cpp` installs the guard
+once for the whole command dispatch, and `builder.cpp` calls `watch()`
+around every blocking `command::wait()`. See `utl::command::exit_status::interrupted()`
+for how a `SIGINT`-terminated child is told apart from an actual failure at
+the call sites.
+
+[[why-two-types]]
+=== Why two types instead of one
+
+An earlier iteration had a single class doing both jobs. It got split
+because the two concerns have genuinely different constraints:
+
+* Installing/restoring a handler is pure mechanism — it has no opinion on
+  what the handler does, and nothing about it is specific to Baldr's own
+  "wait out a child" use case.
+* The count-then-escalate policy is specific business logic that a future
+  reuse (e.g. inside a spawned child watching *itself*, escalating to
+  `abort_self` instead of `kill_pid`) would want without dragging in
+  anything about `sigaction`/previous-disposition bookkeeping.
+
+Concretely: `signal_guard` never calls into `signal_handler`. It's the other
+way around — `signal_handler::handle` is *a* handler function you can hand
+to `signal_guard`'s constructor, one among however many other handler
+policies might exist. Nothing stops a caller from installing a completely
+different `void(int)` handler through the same `signal_guard`.
+
+=== Why the escalation action set is closed, not a callback
+
+The obvious-looking alternative — `signal_handler::watch(pid_t, std::function<void()> on_escalate)`
+— was considered and rejected. Two independent problems with it:
+
+. *Async-signal-safety of the callee.* POSIX only guarantees a small set of
+  functions are safe to call from inside a signal handler (`signal-safety(7)`):
+  no allocation, no locking, no exceptions, no non-reentrant libc calls.
+  `kill()` and `abort()` are on that list; an arbitrary caller-supplied
+  callable is very unlikely to stay inside it — a lambda that logs via
+  spdlog/fmt, or that throws, is a plausible thing to accidentally write,
+  and its failure mode is a hang or memory corruption, not a compile error
+  or a clean crash.
+. *Non-atomic replacement.* A signal can arrive at literally any instruction
+  boundary, including mid-assignment. Replacing a `std::function` (vtable
+  pointer, possible heap pointer, SBO buffer) is not a single atomic write —
+  a handler reading that slot concurrently can observe a torn object. This
+  is a distinct hazard from (1): it exists even if the callback body itself
+  is perfectly safe.
+
+`escalation_action` sidesteps both: it's a closed, `std::uint8_t`-backed
+enum (`none` / `kill_pid` / `abort_self`), and every field it's paired with
+(`s_target`, `s_after`, `s_action`) is a plain scalar behind `volatile`, so
+each individual write is a single, safe store — matching the same
+`volatile sig_atomic_t`-style bookkeeping already used for the delivery
+count. Adding a new action later (e.g. `terminate_self` via `_exit()`) means
+adding an enumerator and a `case` in `dispatch()` — it never touches
+`handle()`'s counting logic.
+
+If you need genuinely arbitrary reaction logic to a signal, don't put it in
+the handler at all: poll `signal_handler::triggered(signum)` from ordinary
+(non-signal-context) code instead, where none of the above constraints
+apply.
+
+=== `SA_RESTART`
+
+`signal_guard`'s `restart` parameter (default `true`) maps directly to
+`SA_RESTART`. When set, interrupted "slow" syscalls (`read()`, `waitpid()`,
+...) are transparently resumed by the kernel rather than returning
+`-1`/`EINTR`. A few things to keep in mind:
+
+* It's not universal. `select`/`poll`/`epoll_wait`, and anything with an
+  explicit timeout, always return early regardless of `SA_RESTART` — that's
+  intentional on the kernel's part, so the caller can recompute the
+  remaining timeout. Only "slow" syscalls that can block indefinitely on an
+  external event are restartable at all; regular file I/O generally isn't
+  interruptible either way.
+* Because of that, `command::poll()` and `command::wait()` retry on `EINTR`
+  themselves rather than trusting `SA_RESTART` alone — this also makes them
+  correct regardless of how a *given* `signal_guard` happens to be
+  configured, or whether some unrelated signal/handler elsewhere in the
+  process interrupts the same call.
+* `SA_RESTART` only governs what happens to the interrupted *syscall* after
+  the handler returns — it never affects whether the handler runs. Every
+  delivery invokes the installed handler unconditionally. This is exactly
+  why the force-kill escalation lives inside `signal_handler::handle()`
+  itself: it doesn't matter whether `waitpid()` is being transparently
+  resumed by the kernel or not, because `kill()` fires from signal-handler
+  context on the delivery that crosses the threshold, independent of
+  whatever's happening to the blocked syscall.
+
+=== `SA_RESETHAND` was deliberately left out
+
+It's tempting to use `SA_RESETHAND` for a "first press asks nicely, second
+press kills for real" pattern — after one delivery, disposition reverts to
+`SIG_DFL` automatically, no application code needed. It's not offered here,
+for two reasons:
+
+* It only guarantees *this process* dies on the next delivery — not
+  whatever child it's waiting on. A child that's still cleaning up (or
+  ignoring the signal entirely, e.g. a debuggee under `gdb`) would be
+  abandoned as an orphan the moment this process gives up, silently
+  reintroducing the exact problem `signal_guard` exists to avoid, just
+  deferred by one keystroke.
+* It caps observability at one delivery: once disposition reverts to
+  `SIG_DFL`, the second/third signal bypasses the installed handler (and
+  any logging built on it) entirely — the kernel terminates the process
+  directly, no chance to react.
+
+The force-kill escalation (<<escalation-thresholds>>) achieves the "second
+press does something more drastic" behavior without giving up either of
+those.
+
+[[escalation-thresholds]]
+=== Escalation thresholds
+
+`signal_handler::ForceKillAfter` (currently `3`) is the default threshold
+passed to `watch()`/`scoped_watch`. Standard (non-realtime) signals like
+`SIGINT` aren't queued — only one instance can be pending at a time — so in
+principle two deliveries sent faster than the handler can run could
+coalesce into one. In practice the handler is a handful of instructions, so
+this isn't reachable by a human pressing Ctrl-C; it would only matter for
+something sending several `SIGINT`s programmatically back-to-back with no
+scheduling gap.
+
+=== Pitfalls if you touch this code
+
+* Don't call anything other than the documented async-signal-safe primitives
+  (`kill()`, `abort()`, `_exit()`, writes to `volatile sig_atomic_t`/`volatile pid_t`)
+  from `signal_handler::handle()` or `dispatch()`. This is the one place in
+  the class where the normal C++ rulebook doesn't apply.
+* `watch()`/`unwatch()` are static and signal-number-keyed rather than tied
+  to a `signal_guard` instance on purpose — call sites like `run_streamed()`
+  don't need a guard threaded through their signature at all, and if no
+  `signal_guard` ever installed `signal_handler::handle()` for that signal
+  (e.g. in a unit test), the calls are simply inert rather than throwing. Don't
+  reintroduce a reference-threaded API for convenience; it was tried and
+  undone.
+* Prefer `scoped_watch` over raw `watch()`/`unwatch()` calls. An exception
+  escaping between the two (e.g. from output processing) must not leave a
+  stale PID registered — once a child is reaped, its PID can be recycled by
+  the kernel for an unrelated process, and a leftover `watch()` would target
+  whatever now holds that PID.
