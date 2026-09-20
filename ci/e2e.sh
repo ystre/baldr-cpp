@@ -11,7 +11,7 @@ mkdir --parent "${WORKSPACE}"
 "${PROJECT_DIR}/ci/prepare.sh"
 cd "${WORKSPACE}"
 
-"${PROJECT_DIR}/ci/init.sh"
+"${PROJECT_DIR}/ci/clean.sh"
 "${PROJECT_DIR}/ci/build.sh"
 "${PROJECT_DIR}/ci/unit-test.sh"
 "${PROJECT_DIR}/ci/function-test.sh"

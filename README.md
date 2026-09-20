@@ -13,6 +13,8 @@ For a clean, end-to-end verification, use `ci/e2e.sh`. It copies the content of
 the repository in `/tmp/workspace/baldr`, cleans the untracked content, and
 packages the application. The result can be found in `/tmp/workspace/baldr/package`.
 
+See `doc` directory for detailed documentation.
+
 ## Project Structure
 
 ```
