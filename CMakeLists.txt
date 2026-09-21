@@ -4,7 +4,7 @@ if(CMAKE_BINARY_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     message(FATAL_ERROR "Building in-source is not supported! Create a build dir and remove ${CMAKE_SOURCE_DIR}/CMakeCache.txt")
 endif()
 
-set(BALDR_VERSION "0.4.0")
+set(BALDR_VERSION "0.4.1")
 project("baldr" VERSION ${BALDR_VERSION} LANGUAGES CXX)
 message(STATUS "Baldr version ${BALDR_VERSION}")
 
@@ -12,6 +12,8 @@ find_package(nova REQUIRED)
 include(GNUInstallDirs)
 include(dependencies.cmake)
 
+# TODO: Figure out why Conan skips loading `novaConfig.cmake`.
+list(APPEND CMAKE_MODULE_PATH "${nova_PACKAGE_FOLDER_RELEASE}/lib/cmake/nova")
 include(novaCompilerWarnings)
 include(novaCompilerSettings)
 
