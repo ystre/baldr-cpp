@@ -5,4 +5,5 @@ set -euo pipefail
 BALDR=baldr
 
 echo "=== Stage: Build ==="
-"${BALDR}" build
+git submodule update --init
+"${BALDR}" build -DSANITIZERS=asan
