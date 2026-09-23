@@ -1,0 +1,20 @@
+= Project Guide
+
+This document describes how to use the repository in more details.
+
+== Pre-requisites
+
+* Baldr itself (it cannot bootstrap itself)
+* CMake
+* GCC
+* Conan and `~/conan_provider.cmake`
+* Makeself
+
+== Useful Commands
+
+Build Baldr with full static linking for usage in any Docker image.
+
+[source,shell]
+----
+baldr build -b Release -DBALDR_STATIC_LINK=ON
+----

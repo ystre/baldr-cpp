@@ -16,8 +16,8 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
-CMAKELISTS="${ROOT_DIR}/CMakeLists.txt"
+PROJECT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
+CMAKELISTS="${PROJECT_DIR}/CMakeLists.txt"
 
 current_version() {
     grep -oP 'set\(BALDR_VERSION "\K[0-9]+\.[0-9]+\.[0-9]+(?=")' "$1"

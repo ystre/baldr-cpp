@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 PROJECT_DIR=$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)
-BALDR="${PROJECT_DIR}/build/release/baldr/baldr"
+BALDR="${PROJECT_DIR}/build/debug/baldr/baldr"
 STATIC_BIN="${PROJECT_DIR}/build/static/baldr/baldr"
 
 echo "Building baldr statically into build/static..."
