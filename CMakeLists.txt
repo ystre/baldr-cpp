@@ -8,12 +8,9 @@ set(BALDR_VERSION "0.4.1")
 project("baldr" VERSION ${BALDR_VERSION} LANGUAGES CXX)
 message(STATUS "Baldr version ${BALDR_VERSION}")
 
-find_package(nova REQUIRED)
 include(GNUInstallDirs)
 include(dependencies.cmake)
 
-# TODO: Figure out why Conan skips loading `novaConfig.cmake`.
-list(APPEND CMAKE_MODULE_PATH "${nova_PACKAGE_FOLDER_RELEASE}/lib/cmake/nova")
 include(novaCompilerWarnings)
 include(novaCompilerSettings)
 
