@@ -20,7 +20,7 @@ jobs:
     # - uses: docker/setup-docker-action@v5
     - name: Test the new build image
       run: |
-        docker run -it --rm local/baldr-buildenv:latest -- conan version
+        docker run --rm local/baldr-buildenv:latest -- conan version
 
 
 
