@@ -18,9 +18,12 @@ jobs:
         push: false
         tags: local/baldr-buildenv:latest
     # - uses: docker/setup-docker-action@v5
-    - name: Test the new build image
-      run: |
-        docker run --rm local/baldr-buildenv:latest -- conan version
+    - uses: addnab/docker-run-action@v3
+      with:
+        image: local/baldr-buildenv:latest
+        # options: -v ${{ github.workspace }}:/work -e ABC=123
+        run: |
+          conan version
 
 
 
