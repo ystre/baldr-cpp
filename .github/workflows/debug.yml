@@ -16,9 +16,11 @@ jobs:
       with:
         context: "{{defaultContext}}:env"
         push: false
-        tags: baldr-buildenv:latest
+        tags: local/baldr-buildenv:latest
     # - uses: docker/setup-docker-action@v5
-
+    - name: Test the new build image
+      run: |
+        docker run -it --rm local/baldr-buildenv:latest -- conan version
 
 
 
