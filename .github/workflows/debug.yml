@@ -17,13 +17,12 @@ jobs:
         context: "{{defaultContext}}:env"
         push: false
         tags: local/baldr-buildenv:latest
-    # - uses: docker/setup-docker-action@v5
     - uses: addnab/docker-run-action@v3
       with:
         image: local/baldr-buildenv:latest
-        # options: -v ${{ github.workspace }}:/work -e ABC=123
+        options: -v ${{ github.workspace }}:/tmp/workspace
         run: |
-          conan version
+          ls -alF /tmp/workspace
 
 
 
