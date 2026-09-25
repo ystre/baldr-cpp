@@ -23,12 +23,9 @@ jobs:
         options: >-
           --user 0:0
           --volume ${{ github.workspace }}:/tmp/workspace/baldr:rw
-          --workdir /tmp/workspace
         run: |
-          ls -alF .
-          ls -alF baldr
-          cmake -S baldr -B baldr/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./conan_provider.cmake
-          cmake --build baldr/build --config Debug
+          cmake -S /tmp/workspace/baldr -B /tmp/workspace/baldr/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=/tmp/workspace/conan_provider.cmake
+          cmake --build /tmp/workspace/baldr/build --config Debug
 
 
 
