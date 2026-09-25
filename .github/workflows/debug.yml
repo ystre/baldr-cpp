@@ -20,9 +20,12 @@ jobs:
     - uses: addnab/docker-run-action@v3
       with:
         image: local/baldr-buildenv:latest
-        options: -v ${{ github.workspace }}:/tmp/workspace
+        options: -v ${{ github.workspace }}:/tmp/workspace/baldr --workdir /tmp/workspace
         run: |
-          ls -alF /tmp/workspace
+          ls -alF .
+          ls -alF baldr
+          cmake -S baldr -B baldr/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./conan_provider.cmake
+          cmake --build baldr/build --config Debug
 
 
 
