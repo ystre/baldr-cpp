@@ -20,7 +20,7 @@ jobs:
     - uses: addnab/docker-run-action@v3
       with:
         image: local/baldr-buildenv:latest
-        options: -v ${{ github.workspace }}:/tmp/workspace/baldr --workdir /tmp/workspace
+        options: --volume ${{ github.workspace }}:/tmp/workspace/baldr:rw --workdir /tmp/workspace
         run: |
           ls -alF .
           ls -alF baldr
