@@ -3,7 +3,6 @@
 set -euo pipefail
 
 BALDR=baldr
-
 echo "=== Stage: Release Build ==="
 "${BALDR}" build \
     --build-type Release \
