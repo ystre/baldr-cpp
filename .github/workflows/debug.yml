@@ -6,43 +6,31 @@ on:
   pull_request:
 
 jobs:
-  image-build:
-    uses: ./.github/workflows/image-build.yml
   debug-coverage:
-    needs: [ image-build ]
-
     runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v3
-    - uses: addnab/docker-run-action@v3
       with:
-        image: local/baldr-buildenv:latest
-        options: >-
-          --user 0:0
-          --volume ${{ github.workspace }}:/tmp/workspace/baldr:rw
-        run: |
-          echo 'Hello from image!'
-          # cmake -S /tmp/workspace/baldr -B /tmp/workspace/baldr/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=/tmp/workspace/conan_provider.cmake
-          # cmake --build /tmp/workspace/baldr/build --config Debug
-
-
-
-    # - uses: actions/setup-python@v5
-      # with:
-        # python-version: "3.12"
-    # - uses: turtlebrowser/get-conan@main
-      # with:
-        # version: "2.6.0"
-    # - name: Install GCC
-      # run: |
-        # sudo apt update
-        # sudo apt install -y build-essential cmake gcovr
-
-    # - name: Build
-      # run: |
-        # cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DBUILD_TESTING=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${{github.workspace}}/conan_provider.cmake
-        # cmake --build ${{github.workspace}}/build --config Debug
+        submodules: true
+        recursive: true
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - uses: turtlebrowser/get-conan@main
+      with:
+        version: "2.6.0"
+    - name: Install GCC
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential cmake gcovr
+    - name: Install Nova
+      run: |
+        conan export deps/nova-cpp/libnova/
+    - name: Build
+      run: |
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DBUILD_TESTING=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${{github.workspace}}/env/conan_provider.cmake
+        cmake --build ${{github.workspace}}/build --config Debug
 
     # - name: Unit Test
       # working-directory: ${{github.workspace}}/build
