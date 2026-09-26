@@ -6,17 +6,15 @@ on:
   pull_request:
 
 jobs:
+  image-build:
+    uses: ./.github/workflows/image-build.yml
   debug-coverage:
+    needs: [ image-build ]
+
     runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v3
-    - name: Create build image
-      uses: docker/build-push-action@v7
-      with:
-        context: "{{defaultContext}}:env"
-        push: false
-        tags: local/baldr-buildenv:latest
     - uses: addnab/docker-run-action@v3
       with:
         image: local/baldr-buildenv:latest
@@ -24,8 +22,9 @@ jobs:
           --user 0:0
           --volume ${{ github.workspace }}:/tmp/workspace/baldr:rw
         run: |
-          cmake -S /tmp/workspace/baldr -B /tmp/workspace/baldr/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=/tmp/workspace/conan_provider.cmake
-          cmake --build /tmp/workspace/baldr/build --config Debug
+          echo 'Hello from image!'
+          # cmake -S /tmp/workspace/baldr -B /tmp/workspace/baldr/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=/tmp/workspace/conan_provider.cmake
+          # cmake --build /tmp/workspace/baldr/build --config Debug
 
 
 

@@ -1,0 +1,28 @@
+name: Image build
+
+on:
+  workflow_call:
+
+jobs:
+  image-build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v3
+    # - name: Set up Docker Buildx
+      # uses: docker/setup-buildx-action@v4
+    - name: Cache Docker layers
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.temp }}/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    - name: Create build image
+      uses: docker/build-push-action@v7
+      with:
+        context: "{{defaultContext}}:env"
+        push: false
+        tags: local/baldr-buildenv:latest
+        cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+        cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache,mode=max,reset=true
