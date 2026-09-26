@@ -158,7 +158,6 @@ struct options {
     bool build_type_explicit = false;
     std::optional<std::string> target;
     std::optional<std::string> exec;
-    bool build_before_run = false;
     bool debug = false;
     std::optional<std::string> image;
     std::vector<std::string> docker_args;
@@ -231,7 +230,6 @@ struct options {
     if (vm.contains("build-dir")) {
         result.build_dir = vm["build-dir"].as<std::string>();
     }
-    result.build_before_run = vm["build"].as<bool>();
     result.debug = vm["debug"].as<bool>();
     result.forwarded_args = std::move(forwarded_args);
 
@@ -294,9 +292,6 @@ struct options {
         if (result.target and result.exec) {
             throw nova::exception("'run' accepts either -t/--target or -x/--exec, not both");
         }
-        if (result.exec and result.build_before_run) {
-            throw nova::exception("'--build' cannot be combined with -x/--exec");
-        }
     } else {
         throw nova::exception("Unknown command: {}", cmd);
     }
@@ -353,9 +348,6 @@ struct options {
     }
 
     if (opts.command == command_type::run) {
-        if (opts.build_before_run) {
-            argv.emplace_back("--build");
-        }
         if (opts.debug) {
             argv.emplace_back("--debug");
         }
@@ -473,9 +465,7 @@ auto entrypoint(auto args) -> int {
                 } else if (options->exec) {
                     builder.run_exec(*options->exec, options->forwarded_args, options->debug);
                 } else {
-                    if (options->build_before_run) {
-                        builder.build(*options->target, options->clean_build);
-                    }
+                    builder.build(*options->target, options->clean_build);
                     builder.run(*options->target, options->forwarded_args, options->debug);
                 }
                 break;
