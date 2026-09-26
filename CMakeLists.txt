@@ -8,7 +8,6 @@ set(BALDR_VERSION "0.4.1")
 project("baldr" VERSION ${BALDR_VERSION} LANGUAGES CXX)
 message(STATUS "Baldr version ${BALDR_VERSION}")
 
-find_package(nova REQUIRED)
 include(GNUInstallDirs)
 include(dependencies.cmake)
 
