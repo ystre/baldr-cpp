@@ -1,3 +1,5 @@
+# https://github.com/conan-io/cmake-conan/blob/develop2/conan_provider.cmake
+
 # The MIT License (MIT)
 #
 # Copyright (c) 2024 JFrog
