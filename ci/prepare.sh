@@ -8,4 +8,4 @@ PROJECT_DIR=$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)
 echo "=== Stage: Prepare ==="
 echo "Clean copying repository content to ${WORKSPACE}..."
 rm -rf "${WORKSPACE}"
-cp --recursive . "${WORKSPACE}"
+cp --recursive "${PROJECT_DIR}" "${WORKSPACE}"

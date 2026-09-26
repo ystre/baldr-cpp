@@ -18,5 +18,4 @@ cd "${WORKSPACE}"
 "${PROJECT_DIR}/ci/build-release.sh"
 "${PROJECT_DIR}/ci/package.sh"
 "${PROJECT_DIR}/ci/package-test.sh"
-
 "${PROJECT_DIR}/ci/summary.sh"

@@ -29,7 +29,7 @@ function build_id_stamp_one() {
 
 echo "=== Stage: Package ==="
 mkdir --parent "${INSTALL_DIR}"
-cmake --install build/release --prefix "${INSTALL_DIR}" --component baldr
+cmake --install ${WORKSPACE}/build/release --prefix "${INSTALL_DIR}" --component baldr
 
 "${WORKSPACE}/tools/debug-info.sh" "${OUT_DIR}"
 build_id_stamp
