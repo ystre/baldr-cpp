@@ -35,9 +35,9 @@ jobs:
       run: |
         ${{env.WORKSPACE}}/ci/unit-test.sh
 
-    # - name: Function Test
-      # run: |
-        # ${{env.WORKSPACE}}/ci/function-test.sh
+    - name: Function Test
+      run: |
+        ${{env.WORKSPACE}}/ci/function-test.sh
 
     - name: Coverage
       run: |
