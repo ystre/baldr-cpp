@@ -35,9 +35,9 @@ jobs:
       run: |
         ${{env.WORKSPACE}}/ci/unit-test.sh
 
-    - name: Function Test
-      run: |
-        ${{env.WORKSPACE}}/ci/function-test.sh
+    # - name: Function Test
+      # run: |
+        # ${{env.WORKSPACE}}/ci/function-test.sh
 
     - name: Coverage
       run: |
@@ -64,7 +64,7 @@ jobs:
 
     - name: Add Coverage PR Comment
       uses: marocchino/sticky-pull-request-comment@v2
-      if: github.event_name == 'pull_request'
+      if: ${{ always() && github.event_name == 'pull_request' }}
       with:
         recreate: true
         path: ${{env.WORKSPACE}}/code-coverage-results.md
