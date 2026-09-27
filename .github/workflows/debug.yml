@@ -5,6 +5,9 @@ on:
     branches: [ master ]
   pull_request:
 
+env:
+  WORKSPACE: ${{github.workspace}}
+
 jobs:
   debug-coverage:
     runs-on: ubuntu-24.04
@@ -21,13 +24,9 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y build-essential cmake gcovr
-    - name: Install Nova
-      run: |
-        conan export deps/nova-cpp/libnova/
     - name: Build
       run: |
-        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Debug -DCOVERAGE=1 -DBUILD_TESTING=1 -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${{github.workspace}}/env/conan_provider.cmake -DCONAN_HOST_PROFILE=${{ github.workspace }}/env/conan-profile
-        cmake --build ${{github.workspace}}/build --config Debug
+        ${{github.workspace}}/ci/build.sh
 
     # - name: Unit Test
       # working-directory: ${{github.workspace}}/build
