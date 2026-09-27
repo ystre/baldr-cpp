@@ -26,45 +26,45 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y build-essential cmake gcovr
+
     - name: Build
       run: |
         ${{env.WORKSPACE}}/ci/build.sh
+
     - name: Unit Test
       run: |
         ${{env.WORKSPACE}}/ci/unit-test.sh
+
     # - name: Function Test
       # run: |
         # ${{env.WORKSPACE}}/ci/function-test.sh
-    - name: Coverage Report
+
+    - name: Coverage
       run: |
         ${{env.WORKSPACE}}/ci/coverage.sh
 
+    - name: Archive Code Coverage Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-coverage-report
+        path: ${{env.WORKSPACE}}/build/coverage/*
 
-    # - name: Package
-      # run: conan create ${{github.workspace}} --test-folder package-test --build=missing --settings compiler.cppstd=20
+    - name: Code Coverage Report
+      uses: irongut/CodeCoverageSummary@v1.3.0
+      with:
+        filename: ${{env.WORKSPACE}}/build/coverage/cobertura.xml
+        badge: true
+        fail_below_min: true
+        format: markdown
+        hide_branch_rate: false
+        hide_complexity: true
+        indicators: true
+        output: both
+        thresholds: '80 90'
 
-    # - name: Archive code coverage results
-      # uses: actions/upload-artifact@v4
-      # with:
-        # name: code-coverage-report
-        # path: build/coverage/*
-
-    # - name: Code Coverage Report
-      # uses: irongut/CodeCoverageSummary@v1.3.0
-      # with:
-        # filename: build/coverage/cobertura.xml
-        # badge: true
-        # fail_below_min: true
-        # format: markdown
-        # hide_branch_rate: false
-        # hide_complexity: true
-        # indicators: true
-        # output: both
-        # thresholds: '80 90'
-
-    # - name: Add Coverage PR Comment
-      # uses: marocchino/sticky-pull-request-comment@v2
-      # if: github.event_name == 'pull_request'
-      # with:
-        # recreate: true
-        # path: code-coverage-results.md
+    - name: Add Coverage PR Comment
+      uses: marocchino/sticky-pull-request-comment@v2
+      if: github.event_name == 'pull_request'
+      with:
+        recreate: true
+        path: ${{env.WORKSPACE}}/code-coverage-results.md
