@@ -20,23 +20,28 @@ jobs:
       with:
         python-version: "3.12"
     - uses: turtlebrowser/get-conan@main
+    # - name: Set up Docker Buildx
+      # uses: docker/setup-buildx-action@v4
     - name: Install GCC
       run: |
         sudo apt update
         sudo apt install -y build-essential cmake gcovr
     - name: Build
       run: |
-        ${{github.workspace}}/ci/build.sh
-    # - name: Unit Test
-      # working-directory: ${{github.workspace}}/build
+        ${{env.WORKSPACE}}/ci/build.sh
+    - name: Unit Test
+      run: |
+        ${{env.WORKSPACE}}/ci/unit-test.sh
+    # - name: Function Test
       # run: |
-        # ctest -C Debug --output-on-failure
-        # mkdir --parent ${{github.workspace}}/build/coverage
-        # gcovr ${{github.workspace}}/build --root ${{github.workspace}} --exclude '.*test.*' --exclude '.*_deps.*' --cobertura --output ${{github.workspace}}/build/coverage/cobertura.xml
-        # gcovr ${{github.workspace}}/build --root ${{github.workspace}} --exclude '.*test.*' --exclude '.*_deps.*' --html-details --output ${{github.workspace}}/build/coverage/baldr.html
+        # ${{env.WORKSPACE}}/ci/function-test.sh
+    - name: Coverage Report
+      run: |
+        ${{env.WORKSPACE}}/ci/coverage.sh
 
-    # # - name: Package
-      # # run: conan create ${{github.workspace}} --test-folder package-test --build=missing --settings compiler.cppstd=20
+
+    # - name: Package
+      # run: conan create ${{github.workspace}} --test-folder package-test --build=missing --settings compiler.cppstd=20
 
     # - name: Archive code coverage results
       # uses: actions/upload-artifact@v4

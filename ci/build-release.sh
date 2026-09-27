@@ -9,6 +9,7 @@ cmake -S "${WORKSPACE}" \
     -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="${WORKSPACE}/env/conan_provider.cmake" \
+    -DCONAN_HOST_PROFILE="${WORKSPACE}/env/conan-profile" \
     -DBALDR_STATIC_LINK=ON
 
 cmake --build "${BUILD_DIR}"
