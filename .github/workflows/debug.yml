@@ -1,0 +1,68 @@
+name: Debug and coverage report
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+env:
+  WORKSPACE: ${{github.workspace}}
+
+jobs:
+  debug-coverage:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - uses: turtlebrowser/get-conan@main
+    - name: Install GCC
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential cmake gcovr
+
+    - name: Build
+      run: |
+        ${{env.WORKSPACE}}/ci/build.sh
+
+    - name: Unit Test
+      run: |
+        ${{env.WORKSPACE}}/ci/unit-test.sh
+
+    - name: Function Test
+      run: |
+        ${{env.WORKSPACE}}/ci/function-test.sh
+
+    - name: Coverage
+      run: |
+        ${{env.WORKSPACE}}/ci/coverage.sh
+
+    - name: Archive Code Coverage Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-coverage-report
+        path: ${{env.WORKSPACE}}/build/debug/coverage/*
+
+    - name: Code Coverage Report
+      uses: irongut/CodeCoverageSummary@v1.3.0
+      with:
+        filename: build/debug/coverage/cobertura.xml
+        badge: true
+        fail_below_min: true
+        format: markdown
+        hide_branch_rate: false
+        hide_complexity: true
+        indicators: true
+        output: both
+        thresholds: '80 90'
+
+    - name: Add Coverage PR Comment
+      uses: marocchino/sticky-pull-request-comment@v2
+      if: ${{ always() && github.event_name == 'pull_request' }}
+      with:
+        recreate: true
+        path: ${{env.WORKSPACE}}/code-coverage-results.md

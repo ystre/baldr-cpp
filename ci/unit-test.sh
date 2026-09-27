@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-BALDR=baldr
+BUILD_DIR="${WORKSPACE}/build/debug"
 
 echo "=== Stage: Unit Test ==="
-"${BALDR}" build --target test
+ctest --test-dir "${BUILD_DIR}" --build-config Debug --output-on-failure
