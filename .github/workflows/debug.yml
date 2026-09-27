@@ -20,8 +20,6 @@ jobs:
       with:
         python-version: "3.12"
     - uses: turtlebrowser/get-conan@main
-    # - name: Set up Docker Buildx
-      # uses: docker/setup-buildx-action@v4
     - name: Install GCC
       run: |
         sudo apt update
