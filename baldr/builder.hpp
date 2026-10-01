@@ -109,6 +109,21 @@ public:
      */
     void run_exec(const std::string& exec_path, const std::vector<std::string>& forwarded_args = {}, bool debug = false);
 
+    /**
+     * @brief   List the names of all buildable targets.
+     *
+     * For a CMake project, configures the build (if not already configured)
+     * and parses the output of `cmake --build <dir> --target help`. For a
+     * Makefile project, always returns an empty list (no generic listing
+     * mechanism exists for plain Makefiles).
+     *
+     * @return  Target names, sorted and de-duplicated. Empty if the project
+     *          type doesn't support listing.
+     *
+     * @throws  nova::exception if a CMake configure is needed and fails.
+     */
+    [[nodiscard]] auto list_targets() -> std::vector<std::string>;
+
 private:
     std::string m_project_dir;
     std::string m_build_type;
@@ -127,6 +142,8 @@ private:
     [[nodiscard]] auto resolve_executable(const std::string& target) const -> std::string;
     [[nodiscard]] auto handle_makefile_project(bool clean_build) const -> std::vector<std::string>;
     [[nodiscard]] auto handle_cmake_project(const std::string& target, bool clean_build) const -> std::vector<std::string>;
+
+    void ensure_cmake_configured(const std::filesystem::path& build_dir, const std::string& build_dir_rel) const;
 
     void configure_cmake(
         const std::filesystem::path& build_dir,

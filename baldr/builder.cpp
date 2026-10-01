@@ -207,6 +207,69 @@ needs_cmake_configure(const fs::path& build_dir, const std::string& resolved_def
     return needs_configure;
 }
 
+/**
+ * @brief   Administrative targets that CMake/CTest always add (dashboard
+ *          submission steps, cache/install bookkeeping, etc.), never
+ *          something a user would want to `build`/`run` by name. Filtered
+ *          out of `parse_cmake_help_targets()`'s output.
+ */
+constexpr std::array<std::string_view, 11> AdministrativeTargets = {
+    "all", "clean", "depend", "edit_cache", "rebuild_cache",
+    "install", "install/local", "install/strip", "list_install_components",
+    "package", "package_source",
+};
+
+/**
+ * @brief   Parse the target names out of `cmake --build <dir> --target
+ *          help`'s output, i.e. lines of the form `... target_name` (with
+ *          an optional trailing annotation, e.g. `(executable)` for some
+ *          generators) that CMake's auto-generated `help` target prints.
+ *
+ * Targets from `AdministrativeTargets` (and their `Nightly*`/`Continuous*`
+ * counterparts not already listed there) are dropped, since they're never
+ * something a user would `build -t`/`run -t`.
+ *
+ * @return  Target names, sorted and de-duplicated.
+ */
+[[nodiscard]] auto parse_cmake_help_targets(const std::string& output) -> std::vector<std::string> {
+    constexpr std::string_view marker = "... ";
+
+    std::vector<std::string> targets;
+    std::istringstream in(output);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (not line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        auto pos = line.find(marker);
+        if (pos == std::string::npos) {
+            continue;
+        }
+
+        auto rest = line.substr(pos + marker.size());
+        auto name = rest.substr(0, rest.find(' '));
+        if (name.empty()) {
+            continue;
+        }
+
+        if (name.starts_with("Nightly") || name.starts_with("Continuous") || name.starts_with("Experimental")) {
+            continue;
+        }
+
+        if (std::ranges::find(AdministrativeTargets, name) != AdministrativeTargets.end()) {
+            continue;
+        }
+
+        targets.push_back(std::move(name));
+    }
+
+    std::ranges::sort(targets);
+    targets.erase(std::ranges::unique(targets).begin(), targets.end());
+
+    return targets;
+}
+
 } // namespace
 
 namespace baldr {
@@ -254,6 +317,22 @@ builder::handle_cmake_project(const std::string& target, bool clean_build) const
         fs::remove_all(build_dir);
     }
 
+    ensure_cmake_configured(build_dir, build_dir_rel);
+
+    if (target.empty()) {
+        return { "cmake", "--build", build_dir_rel };
+    }
+
+    return { "cmake", "--build", build_dir_rel, "--target", target };
+}
+
+/**
+ * @brief   (Re-)configure `build_dir` if needed (missing cache, missing/stale
+ *          marker file), then keep `compile_commands.json` symlinked.
+ *
+ * @throws  nova::exception if the configure command fails.
+ */
+void builder::ensure_cmake_configured(const fs::path& build_dir, const std::string& build_dir_rel) const {
     auto conan_provider = resolve_conan_provider();
     auto resolved_defines = serialize_defines(m_cmake_defines, m_cmake_env, conan_provider);
 
@@ -262,12 +341,6 @@ builder::handle_cmake_project(const std::string& target, bool clean_build) const
     }
 
     link_compile_commands(m_project_dir, m_build_type, build_dir);
-
-    if (target.empty()) {
-        return { "cmake", "--build", build_dir_rel };
-    }
-
-    return { "cmake", "--build", build_dir_rel, "--target", target };
 }
 
 /**
@@ -482,6 +555,35 @@ void builder::run(const std::string& target, const std::vector<std::string>& for
         }
         throw nova::exception("{}", status.describe());
     }
+}
+
+[[nodiscard]] auto builder::list_targets() -> std::vector<std::string> {
+    discover_project_type();
+
+    if (m_project_type != project_type::cmake) {
+        nova::log::debug("Target listing is only supported for CMake projects");
+        return {};
+    }
+
+    auto build_dir_rel = effective_build_dir_rel();
+    auto build_dir = fs::path(m_project_dir) / build_dir_rel;
+
+    ensure_cmake_configured(build_dir, build_dir_rel);
+
+    auto cmd = utl::command{ { "cmake", "--build", build_dir_rel, "--target", "help" }, m_cmake_env, m_project_dir };
+    cmd.run();
+
+    std::string output;
+    std::string chunk;
+    while (chunk = cmd.poll(), not chunk.empty()) {
+        output += chunk;
+    }
+
+    if (auto status = cmd.wait(); not status.success()) {
+        throw nova::exception("Failed to list targets ({}).", status.describe());
+    }
+
+    return parse_cmake_help_targets(output);
 }
 
 void builder::run_exec(const std::string& exec_path, const std::vector<std::string>& forwarded_args, bool debug) {

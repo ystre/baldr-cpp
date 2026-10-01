@@ -94,6 +94,7 @@ namespace {
         ("build", po::bool_switch()->default_value(false), "For 'run': build the project first (not with -x/--exec)")
         ("debug", po::bool_switch()->default_value(false), "For 'run': launch the target under the configured debugger (default: 'gdb --args')")
         ("image,i", po::value<std::string>(), "Docker image to use (required for 'docker'; for 'build'/'run', re-executes inside a container of this image)")
+        ("list-targets", po::bool_switch()->default_value(false), "List available CMake build targets (one per line) and exit; no <command> needed")
     ;
     return desc;
 }
@@ -160,6 +161,7 @@ struct options {
     std::optional<std::string> exec;
     bool debug = false;
     std::optional<std::string> image;
+    bool list_targets = false;
     std::vector<std::string> docker_args;
     std::vector<std::string> forwarded_args;
     std::optional<std::string> stage;
@@ -255,6 +257,8 @@ struct options {
         result.image = vm["image"].as<std::string>();
     }
 
+    result.list_targets = vm["list-targets"].as<bool>();
+
     if (vm.contains("args")) {
         result.docker_args = vm["args"].as<std::vector<std::string>>();
     }
@@ -275,6 +279,11 @@ struct options {
             }
             result.params[param.substr(0, eq_pos)] = param.substr(eq_pos + 1);
         }
+    }
+
+    if (result.list_targets) {
+        // No <command> required: completion scripts invoke this directly.
+        return result;
     }
 
     if (not vm.contains("command")) {
@@ -427,6 +436,32 @@ auto entrypoint(auto args) -> int {
 
     const auto options = parse_args(args_vec);
     if (not options) {
+        return EXIT_SUCCESS;
+    }
+
+    if (options->list_targets) {
+        try {
+            auto cfg = baldr::load(options->project_dir);
+            if (not cfg) {
+                throw nova::exception("Failed to load .baldr.yaml: {}", cfg.error().message);
+            }
+
+            auto merged_cfg = *cfg;
+            if (options->build_type_explicit) {
+                merged_cfg.build_type = options->build_type;
+            }
+            for (const auto& [key, value]: options->cmake_defines) {
+                merged_cfg.cmake_defines[key] = value;
+            }
+
+            auto builder = baldr::builder{ options->project_dir, merged_cfg, options->build_dir };
+            for (const auto& target: builder.list_targets()) {
+                std::cout << target << '\n';
+            }
+        } catch (const nova::exception& ex) {
+            utl::rlog::failure(ex.what());
+            return EXIT_FAILURE;
+        }
         return EXIT_SUCCESS;
     }
 
