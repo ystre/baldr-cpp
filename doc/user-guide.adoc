@@ -10,6 +10,18 @@ The discovery mechanism is slightly different depending on the project type.
 * CMake projects: recursively looks in the tree under `build/<build_type>`.
 * Make projects: looks directly in `build`. No support for build types.
 
+== Compile commands
+
+CMake projects are always configured with
+`-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`, and a symlink is created in the root of
+the project for LSP servers.
+
+== Configuration file
+
+A project-local `.baldr.yaml` (falling back to `~/.baldr.yaml`) can supply
+defaults for `build_type`, `cmake.definitions` and `cmake.env`. CLI flags
+always take precedence over values from either config file.
+
 == Using a container
 
 `-i/--image <image>` on `build` or `run` re-executes the equivalent Baldr
