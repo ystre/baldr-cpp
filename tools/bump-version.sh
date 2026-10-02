@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Bumps BALDR_VERSION in the root CMakeLists.txt.
+# Bumps the version in the root `VERSION` file.
 #
 # Usage:
 #   tools/bump-version.sh [major|minor|patch|auto]
@@ -17,10 +17,10 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
-CMAKELISTS="${PROJECT_DIR}/CMakeLists.txt"
+VERSION_FILE="${PROJECT_DIR}/VERSION"
 
 current_version() {
-    grep -oP 'set\(BALDR_VERSION "\K[0-9]+\.[0-9]+\.[0-9]+(?=")' "$1"
+    cat "$1"
 }
 
 # Determine the bump level ('major'/'minor'/'patch') from the latest commit
@@ -41,20 +41,20 @@ auto_bump_level() {
 }
 
 if [[ "${1:-}" == "--check" ]]; then
-    OLD_VERSION=$(git show "HEAD:CMakeLists.txt" 2>/dev/null | grep -oP 'set\(BALDR_VERSION "\K[0-9]+\.[0-9]+\.[0-9]+(?=")')
-    NEW_VERSION=$(current_version "${CMAKELISTS}")
+    OLD_VERSION=$(git show "HEAD:VERSION" 2>/dev/null || true)
+    NEW_VERSION=$(current_version "${VERSION_FILE}")
 
     if [[ -z "${OLD_VERSION}" || -z "${NEW_VERSION}" ]]; then
-        echo "Could not determine BALDR_VERSION to compare." >&2
+        echo "Could not determine version to compare." >&2
         exit 1
     fi
 
     if [[ "${OLD_VERSION}" == "${NEW_VERSION}" ]]; then
-        echo "BALDR_VERSION was not bumped (still ${NEW_VERSION})." >&2
+        echo "Version was not bumped (still ${NEW_VERSION})." >&2
         exit 1
     fi
 
-    echo "BALDR_VERSION bumped: ${OLD_VERSION} -> ${NEW_VERSION}"
+    echo "Version bumped: ${OLD_VERSION} -> ${NEW_VERSION}"
     exit 0
 fi
 
@@ -64,7 +64,7 @@ if [[ "${PART}" == "auto" ]]; then
     echo "Auto-detected bump level: ${PART}"
 fi
 
-VERSION=$(current_version "${CMAKELISTS}")
+VERSION=$(current_version "${VERSION_FILE}")
 IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
 
 case "${PART}" in
@@ -87,6 +87,6 @@ case "${PART}" in
 esac
 
 NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-sed -i "s/set(BALDR_VERSION \"${VERSION}\")/set(BALDR_VERSION \"${NEW_VERSION}\")/" "${CMAKELISTS}"
+echo "${NEW_VERSION}" > "${VERSION_FILE}"
 
-echo "BALDR_VERSION bumped: ${VERSION} -> ${NEW_VERSION}"
+echo "Version bumped: ${VERSION} -> ${NEW_VERSION}"
