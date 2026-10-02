@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <concepts>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
@@ -89,9 +90,8 @@ namespace {
         ("build-dir", po::value<std::string>(), "Override the default build directory (default: build/<build_type>)")
         ("clean", po::bool_switch()->default_value(false), "For 'build': wipe the build directory before building (clean build)")
         ("cmake-define,D", po::value<std::vector<std::string>>()->composing(), "CMake define KEY=VALUE, repeatable; triggers reconfigure on change")
-        ("target,t", po::value<std::string>(), "Executable name to run (for 'run'; mutually exclusive with -x/--exec)")
-        ("exec,x", po::value<std::string>(), "Arbitrary executable (script or binary) to run instead of a built target (for 'run')")
-        ("build", po::bool_switch()->default_value(false), "For 'run': build the project first (not with -x/--exec)")
+        ("target,t", po::value<std::string>(), "Executable name to run (for 'run')")
+        ("build", po::bool_switch()->default_value(false), "For 'run': build the project first")
         ("debug", po::bool_switch()->default_value(false), "For 'run': launch the target under the configured debugger (default: 'gdb --args')")
         ("image,i", po::value<std::string>(), "Docker image to use (required for 'docker'; for 'build'/'run', re-executes inside a container of this image)")
     ;
@@ -107,24 +107,10 @@ void print_help(std::ostream& out, const po::options_description& desc) {
     out << desc << '\n';
     out << "      -- <args...>          For 'run': forward everything after '--' to the target's own argv\n";
     out << "\n";
-    out << "  CMake projects are always configured with -DCMAKE_EXPORT_COMPILE_COMMANDS=ON;\n";
-    out << "  for the 'Debug' build type, <project_dir>/compile_commands.json is kept\n";
-    out << "  symlinked to it (no need to switch it for other build types).\n";
-    out << "\n";
-    out << "  A project-local '.baldr.yaml' (falling back to '~/.baldr.yaml') can supply\n";
-    out << "  default 'build_type', 'cmake.definitions' and 'cmake.env'; CLI flags always\n";
-    out << "  take precedence over config values.\n";
-    out << "\n";
-    out << "  '-i/--image <image>' on 'build'/'run' re-executes the equivalent baldr\n";
-    out << "  invocation inside a fresh container of <image>: the project directory is\n";
-    out << "  bind-mounted to /workspace, baldr's own binary is bind-mounted in (unless\n";
-    out << "  'docker.mount-baldr: false' in .baldr.yaml), and the container process runs\n";
-    out << "  as the host's uid:gid. The target image must already have the project's\n";
-    out << "  toolchain installed.\n";
-    out << "\n";
     out << "Commands:\n";
     out << "  build      Configure (if needed) and build the project\n";
-    out << "  run        Run a built target (-t/--target) or an arbitrary executable (-x/--exec)\n";
+    out << "  run        Build (if needed) and run a target (-t/--target)\n";
+    out << "\n";
 }
 
 /**
@@ -140,14 +126,6 @@ enum class command_type {
     run,
 };
 
-/**
- * @brief   Outcome of parsing the CLI arguments.
- *
- * Returned wrapped in `std::optional` by `parse_args()`: `std::nullopt`
- * means the process should exit successfully without running any command
- * (e.g. `--help`/`--version` was given, and already handled); otherwise
- * every field below is meaningful.
- */
 struct options {
     command_type command;
     std::string project_dir;
@@ -157,38 +135,90 @@ struct options {
     std::map<std::string, std::string> cmake_defines;
     bool build_type_explicit = false;
     std::optional<std::string> target;
-    std::optional<std::string> exec;
     bool debug = false;
     std::optional<std::string> image;
     std::vector<std::string> docker_args;
     std::vector<std::string> forwarded_args;
-    std::optional<std::string> stage;
-    std::optional<std::string> scenario;
-    std::map<std::string, std::string> params;
 };
 
 /**
- * @brief   Parse `args` (excluding the program name) into a `options`.
+ * @brief   Split `all_args` at the literal `--`, if present.
  *
- * Everything following the literal `--` is forwarded verbatim to the target's
- * own argv (for 'run') and never handed to boost::program_options itself.
+ * @return  {args before '--', args after '--'}.
+ */
+[[nodiscard]] auto split_forwarded_args(const std::vector<std::string>& all_args)
+    -> std::pair<std::vector<std::string>, std::vector<std::string>> {
+    auto it = std::ranges::find(all_args, std::string("--"));
+    if (it == all_args.end()) {
+        return { all_args, {} };
+    }
+    return {
+        std::vector<std::string>(all_args.begin(), it),
+        std::vector<std::string>(std::next(it), all_args.end())
+    };
+}
+
+/**
+ * @brief   Parse a list of `KEY=VALUE` entries into a map.
+ *
+ * @param   display_name    Option name, used only for the error message.
+ *
+ * @throws  if an entry has no '='.
+ */
+[[nodiscard]] auto parse_key_value_entries(
+        const std::vector<std::string>& entries,
+        const std::string& display_name
+) -> std::map<std::string, std::string>
+{
+    std::map<std::string, std::string> result;
+
+    for (const auto& entry: entries) {
+        auto eq_pos = entry.find('=');
+        if (eq_pos == std::string::npos) {
+            throw nova::exception("Invalid {} value '{}' (expected KEY=VALUE)", display_name, entry);
+        }
+
+        result[entry.substr(0, eq_pos)] = entry.substr(eq_pos + 1);
+    }
+
+    return result;
+}
+
+/**
+ * @brief   Validate and translate the parsed `command`/`target`/`exec`/`debug`
+ *          fields of `opts`, setting `opts.command`.
+ *
+ * @throws  on an unknown command or invalid flag combination.
+ */
+void resolve_command(options& opts, const std::string& cmd) {
+    if (cmd == "build") {
+        opts.command = command_type::build;
+    } else if (cmd == "run") {
+        opts.command = command_type::run;
+        if (not opts.target) {
+            throw nova::exception("'run' requires -t/--target <name>");
+        }
+    } else {
+        throw nova::exception("Unknown command: {}", cmd);
+    }
+
+    if (opts.debug and opts.command != command_type::run) {
+        throw nova::exception("'--debug' only applies to 'run'");
+    }
+}
+
+/**
+ * @brief   Parse `args` (excluding the program name) into a `options`.
  *
  * @param   args    Command line arguments, excluding `argv[0]`.
  *
  * @return  Parsed options, or `std::nullopt` if `--help`/`--version` was
  *          given (already printed to stdout).
  *
- * @throws  nova::exception on an invalid combination of flags/command.
+ * @throws  on an invalid combination of flags/command.
  */
 [[nodiscard]] auto parse_args(const std::vector<std::string>& all_args) -> std::optional<options> {
-    std::vector<std::string> args;
-    std::vector<std::string> forwarded_args;
-    if (auto it = std::ranges::find(all_args, std::string("--")); it != all_args.end()) {
-        args.assign(all_args.begin(), it);
-        forwarded_args.assign(std::next(it), all_args.end());
-    } else {
-        args = all_args;
-    }
+    auto [args, forwarded_args] = split_forwarded_args(all_args);
 
     auto desc = build_options_description();
 
@@ -232,23 +262,12 @@ struct options {
     }
     result.debug = vm["debug"].as<bool>();
     result.forwarded_args = std::move(forwarded_args);
-
     if (vm.contains("cmake-define")) {
-        for (const auto& define: vm["cmake-define"].as<std::vector<std::string>>()) {
-            auto eq_pos = define.find('=');
-            if (eq_pos == std::string::npos) {
-                throw nova::exception("Invalid -D/--define value '{}' (expected KEY=VALUE)", define);
-            }
-            result.cmake_defines[define.substr(0, eq_pos)] = define.substr(eq_pos + 1);
-        }
+        result.cmake_defines = parse_key_value_entries(vm["cmake-define"].as<std::vector<std::string>>(), "-D/--define");
     }
 
     if (vm.contains("target")) {
         result.target = vm["target"].as<std::string>();
-    }
-
-    if (vm.contains("exec")) {
-        result.exec = vm["exec"].as<std::string>();
     }
 
     if (vm.contains("image")) {
@@ -259,46 +278,12 @@ struct options {
         result.docker_args = vm["args"].as<std::vector<std::string>>();
     }
 
-    if (vm.contains("stage")) {
-        result.stage = vm["stage"].as<std::string>();
-    }
-
-    if (vm.contains("scenario")) {
-        result.scenario = vm["scenario"].as<std::string>();
-    }
-
-    if (vm.contains("param")) {
-        for (const auto& param: vm["param"].as<std::vector<std::string>>()) {
-            auto eq_pos = param.find('=');
-            if (eq_pos == std::string::npos) {
-                throw nova::exception("Invalid -P/--param value '{}' (expected KEY=VALUE)", param);
-            }
-            result.params[param.substr(0, eq_pos)] = param.substr(eq_pos + 1);
-        }
-    }
-
     if (not vm.contains("command")) {
         print_help(std::cerr, desc);
         throw nova::exception("No command given");
     }
 
-    if (auto cmd = vm["command"].as<std::string>(); cmd == "build") {
-        result.command = command_type::build;
-    } else if (cmd == "run") {
-        result.command = command_type::run;
-        if (not result.target and not result.exec) {
-            throw nova::exception("'run' requires -t/--target <name> or -x/--exec <path>");
-        }
-        if (result.target and result.exec) {
-            throw nova::exception("'run' accepts either -t/--target or -x/--exec, not both");
-        }
-    } else {
-        throw nova::exception("Unknown command: {}", cmd);
-    }
-
-    if (result.debug and result.command != command_type::run) {
-        throw nova::exception("'--debug' only applies to 'run'");
-    }
+    resolve_command(result, vm["command"].as<std::string>());
 
     return result;
 }
@@ -310,7 +295,7 @@ struct options {
  * affects the container-local build/run except `-i/--image` itself and
  * `-p/--project` (rewritten to the bind-mounted `/workspace`).
  *
- * TODO(refact): Reflection to "serialize" `options` into arguments.
+ * TODO(cpp26): Reflection to "serialize" `options` into arguments.
  *
  * @param   baldr_path  Container-side path to invoke (the bind-mounted
  *                      binary's mount point, or a bare name if the image is
@@ -342,9 +327,6 @@ struct options {
     if (opts.target) {
         argv.emplace_back("-t");
         argv.push_back(*opts.target);
-    } else if (opts.exec) {
-        argv.emplace_back("-x");
-        argv.push_back(*opts.exec);
     }
 
     if (opts.command == command_type::run) {
@@ -404,15 +386,70 @@ struct options {
     );
 }
 
+/**
+ * @brief   Load project config, overlaying any config-overriding CLI flags on top.
+ *
+ * @throws  if the config file fails to load.
+ */
+[[nodiscard]] auto load_merged_config(const options& opts) -> baldr::config {
+    auto cfg = baldr::load(opts.project_dir);
+    if (not cfg) {
+        throw nova::exception("Failed to load .baldr.yaml: {}", cfg.error().message);
+    }
+
+    auto merged_cfg = *cfg;
+    if (opts.build_type_explicit) {
+        merged_cfg.build_type = opts.build_type;
+    }
+
+    for (const auto& [key, value] : opts.cmake_defines) {
+        merged_cfg.cmake_defines[key] = value;
+    }
+
+    return merged_cfg;
+}
+
+/**
+ * @brief   Run the `build` or `run` command described by `opts`, either
+ *          locally or inside a container.
+ */
+[[nodiscard]] auto build_or_run(const options& opts) -> int {
+    const auto cfg = load_merged_config(opts);
+
+    if (opts.image) {
+        return run_in_container(opts, cfg);
+    }
+
+    auto builder = baldr::builder{ opts.project_dir, cfg, opts.build_dir };
+
+    if (opts.command == command_type::build) {
+        builder.build(opts.target.value_or(""), opts.clean_build);
+    } else {
+        nova_assert(opts.target.has_value());       // TODO(cpp26): Contracts.
+        builder.build(*opts.target, opts.clean_build);
+        builder.run(*opts.target, opts.forwarded_args, opts.debug);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+/**
+ * @brief   A range of command-line arguments, as produced by `NOVA_MAIN`
+ *          (`argv`, transformed to `std::string_view`).
+ */
+template <typename T>
+concept arg_range =
+    std::ranges::input_range<T> and
+    std::convertible_to<std::ranges::range_reference_t<T>, std::string_view>;
+
 } // namespace
 
 /**
  * @brief   Baldr CLI entry point, invoked via `NOVA_MAIN`.
  *
- * @param   args    Command line arguments (`argv[0]` included), as a range
- *                  of `std::string_view`.
+ * @param   args    Command line arguments, `argv[0]` included.
  */
-auto entrypoint(auto args) -> int {
+auto entrypoint(arg_range auto args) -> int {
     utl::rlog::init("baldr");
 
     std::vector<std::string> args_vec;
@@ -430,47 +467,11 @@ auto entrypoint(auto args) -> int {
         return EXIT_SUCCESS;
     }
 
-    // See doc/baldr/user-guide.adoc for what this covers, and
-    // doc/baldr/developer-manual.adoc for why signal_guard/signal_handler
-    // are separate types.
     auto sigint = utl::signal_guard{ SIGINT, &utl::signal_handler::handle };
 
     int result = EXIT_SUCCESS;
     try {
-        switch (options->command) {
-            case command_type::build:
-            case command_type::run: {
-                auto cfg = baldr::load(options->project_dir);
-                if (not cfg) {
-                    throw nova::exception("Failed to load .baldr.yaml: {}", cfg.error().message);
-                }
-
-                auto merged_cfg = *cfg;
-                if (options->build_type_explicit) {
-                    merged_cfg.build_type = options->build_type;
-                }
-                for (const auto& [key, value]: options->cmake_defines) {
-                    merged_cfg.cmake_defines[key] = value;
-                }
-
-                if (options->image) {
-                    result = run_in_container(*options, merged_cfg);
-                    break;
-                }
-
-                auto builder = baldr::builder{ options->project_dir, merged_cfg, options->build_dir };
-
-                if (options->command == command_type::build) {
-                    builder.build(options->target.value_or(""), options->clean_build);
-                } else if (options->exec) {
-                    builder.run_exec(*options->exec, options->forwarded_args, options->debug);
-                } else {
-                    builder.build(*options->target, options->clean_build);
-                    builder.run(*options->target, options->forwarded_args, options->debug);
-                }
-                break;
-            }
-        }
+        result = build_or_run(*options);
     } catch (const nova::exception& ex) {
         if (not utl::signal_handler::triggered(SIGINT)) {
             utl::rlog::failure(ex.what());
