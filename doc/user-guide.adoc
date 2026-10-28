@@ -22,6 +22,67 @@ A project-local `.baldr.yaml` (falling back to `~/.baldr.yaml`) can supply
 defaults for `build_type`, `cmake.definitions` and `cmake.env`. CLI flags
 always take precedence over values from either config file.
 
+== Logging
+
+Baldr's output is shaped by a few independent settings, each an environment
+variable.
+
+[cols="2,3,2"]
+|===
+| Variable | Values | Default
+
+| `SPDLOG_LEVEL`
+| `trace`, `debug`, `info`, `warn`, `err`, `critical`, `off`; per logger as
+  `<logger>=<level>`, comma-separated (e.g. `debug,docker=off`)
+| `info`
+
+| `BALDR_LOG_FORMAT`
+| `plain` (message only), `timestamped`, `epoch` (`1761656592.123456 W message`)
+| `plain`
+
+| `BALDR_LOG_VIEW`
+| `stream` (every line), `window` (rolling window, replayed on failure),
+  `digest` (errors and warnings as one-liners, then a summary)
+| `stream`
+
+| `BALDR_LOG_FILE`
+| Directory of the log files, empty for none
+| `/tmp/baldr-logs`
+
+| `BALDR_LOG_FILE_FORMAT`
+| As `BALDR_LOG_FORMAT`
+| `epoch`
+
+| `BALDR_LOG_WINDOW_SIZE`
+| Lines shown by `window`
+| 10
+
+| `BALDR_LOG_LINE_MAX`
+| Length cap of a `digest` line
+| 160
+|===
+
+Each run writes the full record to
+`<dir>/<YYYYMMDDTHHMMSS.mmm>Z_<project>_<command>.log`, at least at `info`
+level and without ANSI colors, whatever the terminal shows. The digest ends
+with its path:
+
+----
+src/noisy.hpp:2:26: warning: unused variable ‘unused’ [-Wunused-variable]
+src/b.cpp:2:28: error: ‘undeclared_thing’ was not declared in this scope
+make[2]: *** [src/CMakeFiles/hello.dir/build.make:107: src/CMakeFiles/hello.dir/b.cpp.o] Error 1
+Build failed (exit code 2). 2 errors, 1 warning, 2 repeated, full log: /tmp/baldr-logs/20261028T153609.675Z_proj_build.log
+----
+
+Lines of the build tools get their level from their content: compiler,
+linker, CMake, make, ninja, sanitizer and test failures are errors, compiler
+and CMake warnings are warnings, the rest is info.
+
+A nested `baldr` streams plain lines for the outer one to re-log and writes
+no log file of its own. This is what `-i/--image` relies on, as the container
+runs Baldr again; it applies the same way to a `baldr` called from a build
+step.
+
 == Using a container
 
 `-i/--image <image>` on `build` or `run` re-executes the equivalent Baldr

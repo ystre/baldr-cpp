@@ -3,7 +3,7 @@
 
 #include <libutl/command.hpp>
 #include <libutl/line_reader.hpp>
-#include <libutl/rlog.hpp>
+#include <libutl/log.hpp>
 #include <libutl/signal.hpp>
 
 #include <libnova/error.hpp>
@@ -391,7 +391,7 @@ void builder::build(const std::string& target, bool clean_build) {
 
     auto status = run_streamed(handle_project(target, clean_build), m_project_dir, m_cmake_env);
     if (status.success()) {
-        utl::rlog::success("Build successful.");
+        utl::log::success("Build successful.");
     } else if (status.interrupted()) {
         throw nova::exception("Build interrupted.");
     } else {

@@ -1,7 +1,7 @@
 /**
  * Part of Utility Library
  *
- * Example application demonstrating `utl::rlog`'s scrolling-window
+ * Example application demonstrating `utl::log`'s scrolling-window
  * rendering: a fixed-size rolling window of the most recent log lines,
  * collapsed into a final success/failure message once the tracked work
  * completes.
@@ -10,7 +10,7 @@
  * @date        2026-07-12
  */
 
-#include <libutl/rlog.hpp>
+#include <libutl/log.hpp>
 
 #include <libnova/log.hpp>
 
@@ -19,14 +19,14 @@
 #include <thread>
 
 int main() {
-    utl::rlog::init("rlog-example");
+    utl::log::init("log-example");
 
     static constexpr auto steps = std::to_array<const char*>({
         "Resolving dependencies...",
         "Fetching sources...",
         "Configuring build...",
         "Compiling module 'tty'...",
-        "Compiling module 'rlog'...",
+        "Compiling module 'log'...",
         "Compiling module 'baldr'...",
         "Linking executable...",
         "Running test suite...",
@@ -37,14 +37,14 @@ int main() {
         std::this_thread::sleep_for(std::chrono::milliseconds(400));
     }
 
-    utl::rlog::failure("Task failed.");
+    utl::log::failure("Task failed.");
 
     for (const char* step: steps) {
         nova::log::info("{}", step);
         std::this_thread::sleep_for(std::chrono::milliseconds(400));
     }
 
-    utl::rlog::success("Task finished successfully.");
+    utl::log::success("Task finished successfully.");
 
     return 0;
 }

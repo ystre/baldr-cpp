@@ -44,3 +44,25 @@ TEST(Tty, CapVisibleWidth_ExactBudgetNotTruncated) {
 TEST(Tty, TerminalWidth_FallsBackWhenNotATty) {
     EXPECT_GT(utl::tty::terminal_width(), 0);
 }
+
+TEST(Tty, StripAnsi_RemovesEscapes) {
+    EXPECT_EQ(utl::tty::strip_ansi("\x1b[1;31merror:\x1b[0m bad"), "error: bad");
+}
+
+TEST(Tty, StripAnsi_PlainTextUnchanged) {
+    EXPECT_EQ(utl::tty::strip_ansi("plain"), "plain");
+}
+
+TEST(Tty, StripAnsi_RemovesOscHyperlinks) {
+    EXPECT_EQ(utl::tty::strip_ansi("[\x1b]8;;https://gcc.gnu.org\x1b\\-Wunused\x1b]8;;\x1b\\]"), "[-Wunused]");
+    EXPECT_EQ(utl::tty::strip_ansi("\x1b]0;title\x07text"), "text");
+}
+
+TEST(Tty, StripAnsi_AdjacentAndTrailingEscapes) {
+    EXPECT_EQ(utl::tty::strip_ansi("\x1b[1m\x1b[31mX"), "X");
+    EXPECT_EQ(utl::tty::strip_ansi("text\x1b[0m"), "text");
+}
+
+TEST(Tty, StripAnsi_UnknownEscapeKept) {
+    EXPECT_EQ(utl::tty::strip_ansi("\x1b(Bplain"), "\x1b(Bplain");
+}

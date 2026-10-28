@@ -1,11 +1,11 @@
 /**
  * Part of Utility Library
  *
- * TTY utilities for building TUI applications.
+ * @brief   TTY utilities for building TUI applications.
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Junie)
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-10-31
  */
 
 #pragma once
@@ -15,6 +15,7 @@
 #include <concepts>
 #include <cstddef>
 #include <string>
+#include <string_view>
 
 namespace utl::tty {
 
@@ -77,5 +78,11 @@ std::size_t visible_width(const std::string& line);
  * mid-window; only visible characters count towards `max_width`.
  */
 std::string cap_visible_width(const std::string& line, std::size_t max_width);
+
+/**
+ * @brief   Copy of `line` without its ANSI CSI and OSC (e.g. hyperlink)
+ *          escape sequences.
+ */
+std::string strip_ansi(std::string_view line);
 
 } // namespace utl::tty

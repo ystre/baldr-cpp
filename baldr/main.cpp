@@ -11,7 +11,7 @@
 #include <baldr/config.hpp>
 #include <baldr/docker.hpp>
 
-#include <libutl/rlog.hpp>
+#include <libutl/log.hpp>
 #include <libutl/signal.hpp>
 
 #include <libnova/error.hpp>
@@ -35,6 +35,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace po = boost::program_options;
@@ -125,6 +126,15 @@ enum class command_type {
     build,
     run,
 };
+
+[[nodiscard]] constexpr auto to_string(command_type command) -> std::string_view {
+    switch (command) {
+        case command_type::build:   return "build";
+        case command_type::run:     return "run";
+    }
+
+    std::unreachable();
+}
 
 struct options {
     command_type command;
@@ -304,7 +314,7 @@ void resolve_command(options& opts, const std::string& cmd) {
 [[nodiscard]] auto build_container_argv(const options& opts, const std::string& baldr_path) -> std::vector<std::string> {
     std::vector<std::string> argv{
         baldr_path,
-        opts.command == command_type::build ? "build" : "run",
+        std::string{ to_string(opts.command) },
         "-p", "/workspace"
     };
 
@@ -434,6 +444,20 @@ void resolve_command(options& opts, const std::string& cmd) {
 }
 
 /**
+ * @brief   `<project>_<command>`, naming the run's log file.
+ */
+[[nodiscard]] auto log_label(const options& opts) -> std::string {
+    std::error_code ec;
+    auto project = std::filesystem::weakly_canonical(opts.project_dir, ec).filename().string();
+
+    if (ec or project.empty()) {
+        project = "project";
+    }
+
+    return fmt::format("{}_{}", project, to_string(opts.command));
+}
+
+/**
  * @brief   A range of command-line arguments, as produced by `NOVA_MAIN`
  *          (`argv`, transformed to `std::string_view`).
  */
@@ -450,7 +474,7 @@ concept arg_range =
  * @param   args    Command line arguments, `argv[0]` included.
  */
 auto entrypoint(arg_range auto args) -> int {
-    utl::rlog::init("baldr");
+    utl::log::init("baldr");
 
     std::vector<std::string> args_vec;
     for (const auto& arg: args | std::views::drop(1)) {
@@ -467,14 +491,22 @@ auto entrypoint(arg_range auto args) -> int {
         return EXIT_SUCCESS;
     }
 
+    utl::log::open_file(log_label(*options));
+
+    std::error_code ec;
+    if (auto root = std::filesystem::weakly_canonical(options->project_dir, ec); not ec) {
+        utl::log::relative_to(root);
+    }
+
     auto sigint = utl::signal_guard{ SIGINT, &utl::signal_handler::handle };
 
     int result = EXIT_SUCCESS;
+
     try {
         result = build_or_run(*options);
     } catch (const nova::exception& ex) {
         if (not utl::signal_handler::triggered(SIGINT)) {
-            utl::rlog::failure(ex.what());
+            utl::log::failure(ex.what());
         }
         result = EXIT_FAILURE;
     }

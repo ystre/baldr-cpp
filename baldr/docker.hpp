@@ -15,6 +15,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/local/stream_protocol.hpp>
 
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -34,6 +35,7 @@ struct bind_mount {
 struct container_config {
     std::vector<bind_mount> mounts;
     std::optional<std::string> user;
+    std::map<std::string, std::string> env;
     bool auto_remove = true;
     bool force_pull = false;
 };
@@ -94,9 +96,9 @@ public:
     /**
      * @brief   Stream the container's combined stdout/stderr.
      *
-     * Forwards each line to `nova::log::info` if not `log_raw`.
+     * Logs each line at its `classify()`d level.
      */
-    void stream_logs(const std::string& id, bool log_raw);
+    void stream_logs(const std::string& id);
 
 private:
     /**
@@ -122,8 +124,10 @@ private:
 
 /**
  * @brief   Pull `image`, run `cmd` inside a fresh, auto-removed container,
- *          stream its output via `nova::log::info`, and return its exit
- *          code.
+ *          log its output line by line, and return its exit code.
+ *
+ * The container gets `utl::log::child_env()` on top of `cfg.env`, so a
+ * `baldr` inside streams plain lines for this process to re-log.
  *
  * @param   mounts  Host directories to bind-mount into the container.
  * @param   user    If set, run the container's process as this
