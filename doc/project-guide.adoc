@@ -18,3 +18,18 @@ Build Baldr with full static linking for usage in any Docker image.
 ----
 baldr build -b Release -DBALDR_STATIC_LINK=ON
 ----
+
+== Coding Guidelines
+
+* Apply https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines[C++ Core Guidelines].
+* Functions should have minimal scope (SRP, Single Responsibility Principle)
+** Use concise function documentation, avoid assuming knowledge about outer layers.
+* Rely on link:../deps/nova-cpp/libnova/libnova/[Nova] for generic C++ abstractions.
+** Especially for error handling.
+
+== Testing Guidelines
+
+* All functions that do not rely on system calls or other processes should be
+  unit-tested.
+** Otherwise their functionality should be tested by link:../tests[system
+   tests].

@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <chrono>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
@@ -482,64 +481,6 @@ void builder::run(const std::string& target, const std::vector<std::string>& for
         }
         throw nova::exception("{}", status.describe());
     }
-}
-
-void builder::run_exec(const std::string& exec_path, const std::vector<std::string>& forwarded_args, bool debug) {
-    auto resolved = fs::path(exec_path);
-    if (resolved.is_relative()) {
-        resolved = fs::path(m_project_dir) / resolved;
-    }
-
-    if (not fs::exists(resolved)) {
-        throw nova::exception("Executable does not exist: `{}`", resolved.string());
-    }
-
-    if (debug) {
-        nova::log::debug("Running `{}` in `{}` via debugger...", resolved.string(), m_project_dir);
-    } else {
-        nova::log::debug("Running `{}` in `{}`...", resolved.string(), m_project_dir);
-    }
-
-    auto argv = build_argv(resolved.string(), forwarded_args, debug);
-
-    // TODO: Hardcoded for now; should come from `.baldr.yaml` instead of
-    // just these two variables. Kept separate from `m_cmake_env` (CC/CXX
-    // etc. for the build), which doesn't apply here.
-    std::map<std::string, std::string> env;
-    env["BALDR_ENV_WORKING_DIR"] = fs::absolute(m_project_dir).string();
-    env["BALDR_ENV_BUILD_DIR"] = effective_build_dir_rel();
-
-    const auto start = nova::steady_now();
-
-    utl::command::exit_status status = [&] {
-        if (debug) {
-            auto cmd = utl::command{ argv, env, m_project_dir, /*interactive=*/true };
-            cmd.run();
-            auto watch = utl::signal_handler::scoped_watch{ SIGINT, cmd.pid() };
-            return cmd.wait();
-        }
-        return run_streamed(argv, m_project_dir, env);
-    }();
-
-    const std::chrono::duration<double> elapsed = nova::steady_now() - start;
-
-    const auto stats = [&]() {
-        const std::chrono::duration<double> cpu_time = status.usage().user_time + status.usage().system_time;
-        const double peak_rss_mb = static_cast<double>(status.usage().peak_rss_kb) / 1024.0;
-        return fmt::format("{:.3f}s (cpu {:.3f}s, peak {:.1f} MB)", elapsed.count(), cpu_time.count(), peak_rss_mb);
-    }();
-
-    if (status.success()) {
-        nova::log::info("`{}` finished successfully (exit code {}) in {}", resolved.string(), status.code(), stats);
-        return;
-    }
-
-    if (status.interrupted()) {
-        nova::log::warn("`{}` interrupted after {}", resolved.string(), stats);
-        throw nova::exception("`{}` interrupted.", resolved.string());
-    }
-
-    throw nova::exception("{} ({})", status.describe(), stats);
 }
 
 } // namespace baldr
