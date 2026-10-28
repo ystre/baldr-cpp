@@ -19,7 +19,7 @@ child (and in anything it in turn `exec`s or forks, since the slave fd is
 inherited the same way a pipe fd would be), so tools keep coloring their
 output as if they were run directly in a terminal. `poll()` hands those bytes
 back completely unprocessed — Baldr does not recolor, strip, or otherwise
-interpret them; see `nxs::rlog::window` in `libnxs/rlog.cpp` for how the
+interpret them; see `utl::rlog::window` in `libutl/rlog.cpp` for how the
 scrolling-window sink logs/replays them as-is rather than imposing its own
 color.
 
