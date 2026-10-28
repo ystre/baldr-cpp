@@ -1,5 +1,8 @@
 #include <baldr/docker.hpp>
 
+#include <baldr/classify.hpp>
+
+#include <libutl/line_reader.hpp>
 #include <libutl/rlog.hpp>
 #include <libnova/error.hpp>
 #include <libnova/log.hpp>
@@ -11,7 +14,6 @@
 
 #include <array>
 #include <cstdlib>
-#include <iostream>
 #include <limits>
 #include <tuple>
 
@@ -122,6 +124,15 @@ std::string docker_client::create_container(
         body["User"] = *cfg.user;
     }
 
+    if (not cfg.env.empty()) {
+        std::vector<std::string> env;
+        env.reserve(cfg.env.size());
+        for (const auto& [key, value] : cfg.env) {
+            env.push_back(fmt::format("{}={}", key, value));
+        }
+        body["Env"] = env;
+    }
+
     const auto response = request_json("POST", api_prefix() + "/containers/create", body);
     if (not response.contains("Id")) {
         throw nova::exception("Container create failed: {}", response.dump());
@@ -142,7 +153,7 @@ int docker_client::wait_container(const std::string& id) {
     return response["StatusCode"].get<int>();
 }
 
-void docker_client::stream_logs(const std::string& id, bool log_raw) {
+void docker_client::stream_logs(const std::string& id) {
     const auto path = fmt::format("{}/containers/{}/logs?stdout=1&stderr=1&follow=1", api_prefix(), id);
 
     http::request<http::empty_body> req{ http::verb::get, path, 11 };
@@ -161,6 +172,7 @@ void docker_client::stream_logs(const std::string& id, bool log_raw) {
     // buffered instead of waiting for the whole response to finish.
     std::string pending;
     std::array<char, 4096> chunk{};
+    utl::line_reader lines([](std::string& line) { log_output(line); });
 
     while (not parser.is_done()) {
         parser.get().body().data = chunk.data();
@@ -184,21 +196,12 @@ void docker_client::stream_logs(const std::string& id, bool log_raw) {
                 break;
             }
 
-            auto content = std::string_view{ pending }.substr(offset + 8, size);
-            if (content.ends_with('\n')) {
-                content.remove_suffix(1);
-            }
-
-            if (log_raw) {
-                std::cerr << ' ' << content << '\n';
-            } else {
-                nova::log::info("{}", content);
-            }
-
+            lines.feed(std::string_view{ pending }.substr(offset + 8, size));
             offset += 8 + size;
         }
         pending.erase(0, offset);
     }
+    lines.feed_eof();
 }
 
 int docker_run(
@@ -216,14 +219,12 @@ int docker_run(
         client.pull_image(image);
     }
 
-    const auto id = client.create_container(image, cmd, cfg);
-    client.start_container(id);
+    auto container_cfg = cfg;
+    container_cfg.env.merge(utl::rlog::child_env());
 
-    if (cmd[0].contains("baldr")) {
-        client.stream_logs(id, true);
-    } else {
-        client.stream_logs(id, false);
-    }
+    const auto id = client.create_container(image, cmd, container_cfg);
+    client.start_container(id);
+    client.stream_logs(id);
 
     const int status = client.wait_container(id);
     if (status == 0) {

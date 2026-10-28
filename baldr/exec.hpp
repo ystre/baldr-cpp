@@ -20,18 +20,16 @@
 namespace baldr {
 
 /**
- * @brief   Run `args` inside `working_directory`, streaming its combined
- *          stdout/stderr output via `nova::log::info`.
+ * @brief   Run `args` inside `working_directory`, logging its combined
+ *          stdout/stderr output line by line at the `classify()`d level.
  *
  * Registers the spawned child with `signal_handler::watch()` for `SIGINT`
  * for the duration of the run (see `baldr/signal.hpp`), so repeated Ctrl-C
  * still takes it down even if it's ignoring/outliving the signal itself.
  *
- * Unless `env` already sets it, `SPDLOG_MODE=plain` is added to the child's
- * environment, so a spawned process that's itself an `utl::rlog` user (e.g.
- * a nested `baldr` invocation) doesn't attach its own timestamp/name/level
- * prefix on top of the one this function's own re-logging already adds per
- * line (see `utl::rlog::mode::plain` in `libutl/rlog.hpp`).
+ * `utl::rlog::child_env()` is added to the child's environment where `env`
+ * doesn't set the same variables, so a nested `baldr` streams plain lines
+ * for this process to re-log, and writes no log file of its own.
  *
  * @return  The command's detailed outcome (see `baldr::command::exit_status`),
  *          so callers can tell a `SIGINT` interruption apart from an actual

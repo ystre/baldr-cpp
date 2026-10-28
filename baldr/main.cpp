@@ -434,6 +434,18 @@ void resolve_command(options& opts, const std::string& cmd) {
 }
 
 /**
+ * @brief   `<project>_<command>`, naming the run's log file.
+ */
+[[nodiscard]] auto log_label(const options& opts) -> std::string {
+    std::error_code ec;
+    auto project = std::filesystem::weakly_canonical(opts.project_dir, ec).filename().string();
+    if (ec or project.empty()) {
+        project = "project";
+    }
+    return fmt::format("{}_{}", project, opts.command == command_type::build ? "build" : "run");
+}
+
+/**
  * @brief   A range of command-line arguments, as produced by `NOVA_MAIN`
  *          (`argv`, transformed to `std::string_view`).
  */
@@ -465,6 +477,12 @@ auto entrypoint(arg_range auto args) -> int {
     const auto options = parse_args(args_vec);
     if (not options) {
         return EXIT_SUCCESS;
+    }
+
+    utl::rlog::open_file(log_label(*options));
+    std::error_code ec;
+    if (auto root = std::filesystem::weakly_canonical(options->project_dir, ec); not ec) {
+        utl::rlog::relative_to(root);
     }
 
     auto sigint = utl::signal_guard{ SIGINT, &utl::signal_handler::handle };
