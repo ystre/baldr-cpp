@@ -78,4 +78,10 @@ std::size_t visible_width(const std::string& line);
  */
 std::string cap_visible_width(const std::string& line, std::size_t max_width);
 
+/**
+ * @brief   Copy of `line` without its ANSI CSI and OSC (e.g. hyperlink)
+ *          escape sequences.
+ */
+std::string strip_ansi(const std::string& line);
+
 } // namespace utl::tty

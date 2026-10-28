@@ -29,6 +29,24 @@ std::size_t skip_csi_sequence(const std::string& line, std::size_t i) {
     return j;
 }
 
+/**
+ * @brief   Advance `i` past an OSC (`\x1b]...`) escape sequence starting at
+ *          `i`, e.g. a hyperlink, terminated by BEL or ST (`\x1b\\`).
+ *
+ * Stops at the end of `line` if the sequence never terminates.
+ */
+std::size_t skip_osc_sequence(const std::string& line, std::size_t i) {
+    for (std::size_t j = i + 2; j < line.size(); ++j) {
+        if (line[j] == '\x07') {
+            return j + 1;
+        }
+        if (line[j] == '\x1b' and j + 1 < line.size() and line[j + 1] == '\\') {
+            return j + 2;
+        }
+    }
+    return line.size();
+}
+
 } // namespace detail
 
 std::size_t terminal_width() {
@@ -85,6 +103,24 @@ std::string cap_visible_width(const std::string& line, std::size_t max_width) {
 
     result += suffix;
     result += trailing_escape;
+    return result;
+}
+
+std::string strip_ansi(const std::string& line) {
+    std::string result;
+    result.reserve(line.size());
+    for (std::size_t i = 0; i < line.size();) {
+        if (line[i] == '\x1b' and i + 1 < line.size() and line[i + 1] == '[') {
+            i = detail::skip_csi_sequence(line, i);
+            continue;
+        }
+        if (line[i] == '\x1b' and i + 1 < line.size() and line[i + 1] == ']') {
+            i = detail::skip_osc_sequence(line, i);
+            continue;
+        }
+        result += line[i];
+        ++i;
+    }
     return result;
 }
 
