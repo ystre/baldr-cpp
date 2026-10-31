@@ -18,9 +18,40 @@ the project for LSP servers.
 
 == Configuration file
 
-A project-local `.baldr.yaml` (falling back to `~/.baldr.yaml`) can supply
-defaults for `build_type`, `cmake.definitions` and `cmake.env`. CLI flags
-always take precedence over values from either config file.
+The global (in HOME) and project-local configuration files are merged. They are
+called `.baldr.<ext>` and the extension can be YAML, JSON or TOML. the two need
+not be in the same format, and more than one in the same directory is an error.
+
+The merging behaviour:
+
+* maps (`env`, `cmake.definitions`) merge key by key
+* anything else (a list such as `debugger-args` too) replaces the global value
+* empty or null value deletes the key, for example,  `build-type:` resets it to
+  Baldr's default and an empty entry under `env` or `cmake.definitions` drops
+  the one inherited from the global file. Applicable to YAML and JSON only.
+
+CLI flags always take precedence over both files.
+
+A missing or empty file (or one with only comments) is the same as no
+settings; anything else must be a map.
+
+[source,yaml]
+----
+debugger: gdb
+debugger-args: [--args]
+build-type: Debug
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 8
+cmake:
+  definitions:
+    CMAKE_CXX_STANDARD: 23
+docker:
+  mount-baldr: true
+  baldr-path: /path/to/baldr
+----
+
+The values under `env` and `cmake.definitions` take any scalar as its text, but
+a number keeps only its numeric value, so quote a version such as `"1.10"`.
 
 == Logging
 

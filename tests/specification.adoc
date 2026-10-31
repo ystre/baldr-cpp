@@ -10,6 +10,17 @@ The script `run.sh` is the runner for all test suites.
 
 **Description**: Calls Baldr with various CLI arguments smoke testing features.
 
+=== Config files
+
+**Script**: `config.sh`
+
+**Description**: Runs a copy of the CMake test project with config files in
+every format, in the project and in a fake `$HOME`, checking that each is
+found, that the two merge whatever their formats, that a deleted define leaves
+an existing build directory, and that a broken setup (several config files in
+one directory, an inaccessible directory, malformed or wrongly typed content)
+fails with a clear error.
+
 === Building in Docker image
 
 **Script**: `glibc.sh`

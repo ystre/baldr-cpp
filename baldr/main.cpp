@@ -402,12 +402,8 @@ void resolve_command(options& opts, const std::string& cmd) {
  * @throws  if the config file fails to load.
  */
 [[nodiscard]] auto load_merged_config(const options& opts) -> baldr::config {
-    auto cfg = baldr::load(opts.project_dir);
-    if (not cfg) {
-        throw nova::exception("Failed to load .baldr.yaml: {}", cfg.error().message);
-    }
+    auto merged_cfg = baldr::load(opts.project_dir);
 
-    auto merged_cfg = *cfg;
     if (opts.build_type_explicit) {
         merged_cfg.build_type = opts.build_type;
     }

@@ -7,6 +7,7 @@
 #include <libutl/signal.hpp>
 
 #include <libnova/error.hpp>
+#include <libnova/io.hpp>
 #include <libnova/log.hpp>
 #include <libnova/utils.hpp>
 
@@ -186,6 +187,43 @@ void link_compile_commands(const std::string& project_dir, const std::string& bu
 }
 
 /**
+ * @brief   The contents of the marker file in `build_dir`; empty if there is
+ *          none.
+ */
+[[nodiscard]] auto read_marker(const fs::path& build_dir) -> std::string {
+    return nova::read_file((build_dir / DefinesMarkerFile).string()).value_or(std::string{ });
+}
+
+/**
+ * @brief   The keys in the defines section of `recorded`, a marker file's
+ *          contents, that are no longer in `defines`.
+ */
+[[nodiscard]] auto dropped_defines(
+        const std::string& recorded,
+        const std::map<std::string, std::string>& defines
+) -> std::vector<std::string> {
+    auto ret = std::vector<std::string>{ };
+    auto lines = std::istringstream{ recorded };
+
+    for (auto line = std::string{ }; std::getline(lines, line) and line != "--env--"; ) {
+        const auto separator = line.find('=');
+
+        // A line without one is the continuation of a multi-line value
+        if (separator == std::string::npos) {
+            continue;
+        }
+
+        auto key = line.substr(0, separator);
+
+        if (not defines.contains(key)) {
+            ret.push_back(std::move(key));
+        }
+    }
+
+    return ret;
+}
+
+/**
  * @brief   Whether `build_dir` needs a (re-)configure: missing cache,
  *          missing marker file, or a marker mismatch against
  *          `resolved_defines`.
@@ -197,10 +235,7 @@ needs_cmake_configure(const fs::path& build_dir, const std::string& resolved_def
         || not fs::exists(build_dir / DefinesMarkerFile);
 
     if (not needs_configure) {
-        std::ifstream marker(build_dir / DefinesMarkerFile);
-        std::ostringstream recorded;
-        recorded << marker.rdbuf();
-        needs_configure = recorded.str() != resolved_defines;
+        needs_configure = read_marker(build_dir) != resolved_defines;
     }
 
     return needs_configure;
@@ -273,6 +308,9 @@ builder::handle_cmake_project(const std::string& target, bool clean_build) const
  * @brief   Run `cmake`'s configure step for `build_dir_rel`, then
  *          record `resolved_defines` in the marker file.
  *
+ * Defines recorded by the previous configure but gone since are unset via `-U`.
+ * CMake would keep them in its cache otherwise.
+ *
  * @throws  nova::exception if the configure command fails.
  */
 void builder::configure_cmake(
@@ -287,9 +325,14 @@ void builder::configure_cmake(
         "cmake",
         "-S", ".",
         "-B", build_dir_rel,
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        fmt::format("-DCMAKE_BUILD_TYPE={}", m_build_type)
     };
+
+    for (const auto& key : dropped_defines(read_marker(build_dir), m_cmake_defines)) {
+        configure_cmd.push_back(fmt::format("-U{}", key));
+    }
+
+    configure_cmd.push_back("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON");
+    configure_cmd.push_back(fmt::format("-DCMAKE_BUILD_TYPE={}", m_build_type));
 
     nova::log::debug("CMake command: `{}`", fmt::join(configure_cmd, " "));
 

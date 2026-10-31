@@ -8,7 +8,7 @@ add_library(builder
     exec.cpp
 )
 
-target_link_libraries(builder PUBLIC utils Boost::headers)
+target_link_libraries(builder PUBLIC utils Boost::headers nlohmann_json::nlohmann_json)
 add_test_target(builder)
 
 target_sources(builder PUBLIC
