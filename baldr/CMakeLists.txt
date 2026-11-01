@@ -8,6 +8,7 @@ add_library(builder
 )
 
 target_link_libraries(builder PUBLIC utils Boost::headers)
+code_analysis(builder PRIVATE)
 add_test_target(builder)
 
 target_sources(builder PUBLIC
@@ -23,6 +24,7 @@ target_include_directories(builder PUBLIC
 
 add_executable(baldr main.cpp)
 target_link_libraries(baldr PRIVATE builder Boost::program_options)
+code_analysis(baldr PRIVATE)
 
 option(BALDR_STATIC_LINK "Fully statically link the baldr executable" OFF)
 

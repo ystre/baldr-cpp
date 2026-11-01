@@ -23,6 +23,8 @@ function(add_test_target MODULE_NAME)
         GTest::gmock
     )
 
+    code_analysis(${target} PRIVATE)
+
     gtest_discover_tests(
         ${target}
         DISCOVERY_MODE PRE_TEST

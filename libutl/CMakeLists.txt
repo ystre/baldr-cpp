@@ -23,10 +23,13 @@ target_link_libraries(utils PUBLIC
     spdlog::spdlog_header_only
 )
 
+code_analysis(utils PRIVATE)
+
 add_test_target(utils)
 
 add_executable(example-rlog rlog.ex.cpp)
 target_link_libraries(example-rlog PRIVATE utils)
+code_analysis(example-rlog PRIVATE)
 
 install(TARGETS utils
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -36,3 +39,4 @@ install(TARGETS utils
 
 add_executable(example-command command.ex.cpp)
 target_link_libraries(example-command PRIVATE utils)
+code_analysis(example-command PRIVATE)

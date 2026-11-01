@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -7,10 +7,10 @@ if [ -z "${INSTALL_PATH:-""}" ]; then
 fi
 
 if [ ! -e "$INSTALL_PATH" ]; then
-    mkdir --parent "$INSTALL_PATH"
+    mkdir -p "$INSTALL_PATH"
 fi
 
-cp --recursive ./install/* "$INSTALL_PATH"
+cp -R ./install/* "$INSTALL_PATH"
 
 echo "Baldr has been installed to: $INSTALL_PATH"
 echo "Verifying..."

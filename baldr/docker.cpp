@@ -29,10 +29,10 @@ constexpr auto default_api_version = "v1.43";
  *          Docker's 8-byte frame headers, starting at `offset`.
  */
 std::uint32_t frame_payload_size(std::string_view buf, std::size_t offset) {
-    return (static_cast<std::uint8_t>(buf[offset + 4]) << 24) |
-           (static_cast<std::uint8_t>(buf[offset + 5]) << 16) |
-           (static_cast<std::uint8_t>(buf[offset + 6]) << 8) |
-            static_cast<std::uint8_t>(buf[offset + 7]);
+    return (static_cast<std::uint32_t>(static_cast<std::uint8_t>(buf[offset + 4])) << 24) |
+           (static_cast<std::uint32_t>(static_cast<std::uint8_t>(buf[offset + 5])) << 16) |
+           (static_cast<std::uint32_t>(static_cast<std::uint8_t>(buf[offset + 6])) << 8) |
+            static_cast<std::uint32_t>(static_cast<std::uint8_t>(buf[offset + 7]));
 }
 
 } // namespace
