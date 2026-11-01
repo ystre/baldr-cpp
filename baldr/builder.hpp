@@ -78,37 +78,6 @@ public:
      */
     void run(const std::string& target, const std::vector<std::string>& forwarded_args = {}, bool debug = false);
 
-    /**
-     * @brief   Run an arbitrary executable (script or binary), attached to
-     *          the caller's own TTY, bypassing target resolution/build
-     *          entirely.
-     *
-     * The executable is exposed to Baldr's directory conventions via
-     * `BALDR_ENV_WORKING_DIR` (absolute project directory) and
-     * `BALDR_ENV_BUILD_DIR` (build directory, relative to the project
-     * directory, for the configured build type). This is a separate env set
-     * from `m_cmake_env` (CC/CXX etc. for the build); it is hardcoded for
-     * now, but is expected to become config-sourced (`.baldr.yaml`) rather
-     * than fixed to just these two variables.
-     *
-     * Wall-clock elapsed time, CPU time and peak memory (via `wait4(2)`,
-     * see `command::exit_status::usage()`) are measured around the run and
-     * reported together with the exit code.
-     *
-     * @param   exec_path       Path to the executable to run, resolved
-     *                          relative to `project_dir` if not absolute.
-     * @param   forwarded_args  Extra arguments appended after the
-     *                          executable's own path, forwarded verbatim to
-     *                          its argv.
-     * @param   debug           If `true`, launch it under the configured
-     *                          debugger, same as `run()` (it's on the caller
-     *                          not to point a debugger at a shell script).
-     *
-     * @throws  nova::exception if the executable doesn't exist or exits with
-     *          a non-zero code.
-     */
-    void run_exec(const std::string& exec_path, const std::vector<std::string>& forwarded_args = {}, bool debug = false);
-
 private:
     std::string m_project_dir;
     std::string m_build_type;

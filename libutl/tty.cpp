@@ -1,3 +1,13 @@
+/**
+ * Part of Utility Library
+ *
+ * @brief   TTY utilities for building TUI applications.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-12
+ * @updated     2026-10-31
+ */
+
 #include <libutl/tty.hpp>
 
 #include <string_view>
@@ -11,22 +21,42 @@ namespace detail {
 
 /**
  * @brief   Advance `i` past a CSI (`\x1b[...`) escape sequence starting at
- *          `i`, returning the index of the sequence's final byte, exclusive
- *          (i.e. one past the terminating byte).
+ *          `i`, returning the index of the sequence's final byte.
  *
- * Assumes `line[i] == '\x1b'` and `line[i + 1] == '['`. Stops gracefully at
- * the end of `line` if the sequence is truncated/malformed and never
- * terminates.
+ * Stops at the end of `line` if the sequence never terminates.
  */
-std::size_t skip_csi_sequence(const std::string& line, std::size_t i) {
-    std::size_t j = i + 2;
-    while (j < line.size() and (line[j] == ';' or (line[j] >= '0' and line[j] <= '9'))) {
-        ++j;
+std::size_t skip_csi_sequence(std::string_view line, std::size_t i) {
+    i += 2;
+
+    while (i < line.size() and (line[i] == ';' or (line[i] >= '0' and line[i] <= '9'))) {
+        ++i;
     }
-    if (j < line.size()) {
-        ++j;
+
+    if (i < line.size()) {
+        ++i;
     }
-    return j;
+
+    return i;
+}
+
+/**
+ * @brief   Advance `i` past an OSC (`\x1b]...`) escape sequence starting at
+ *          `i`, e.g. a hyperlink, terminated by BEL or ST (`\x1b\\`).
+ *
+ * Stops at the end of `line` if the sequence never terminates.
+ */
+std::size_t skip_osc_sequence(std::string_view line, std::size_t i) {
+    for (i += 2; i < line.size(); ++i) {
+        if (line[i] == '\x07') {
+            return i + 1;
+        }
+
+        if (line[i] == '\x1b' and i + 1 < line.size() and line[i + 1] == '\\') {
+            return i + 2;
+        }
+    }
+
+    return line.size();
 }
 
 } // namespace detail
@@ -85,6 +115,24 @@ std::string cap_visible_width(const std::string& line, std::size_t max_width) {
 
     result += suffix;
     result += trailing_escape;
+    return result;
+}
+
+std::string strip_ansi(std::string_view line) {
+    std::string result;
+    result.reserve(line.size());
+
+    for (std::size_t i = 0; i < line.size();) {
+        if (line[i] == '\x1b' and i + 1 < line.size() and line[i + 1] == '[') {
+            i = detail::skip_csi_sequence(line, i);
+        } else if (line[i] == '\x1b' and i + 1 < line.size() and line[i + 1] == ']') {
+            i = detail::skip_osc_sequence(line, i);
+        } else {
+            result += line[i];
+            ++i;
+        }
+    }
+
     return result;
 }
 

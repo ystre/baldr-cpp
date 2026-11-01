@@ -3,7 +3,7 @@ file(GLOB_RECURSE UTL_HEADER_FILES "*.hpp")
 add_library(utils
     command.cpp
     tty.cpp
-    rlog.cpp
+    log.cpp
 )
 
 target_sources(utils PUBLIC
@@ -27,9 +27,9 @@ code_analysis(utils PRIVATE)
 
 add_test_target(utils)
 
-add_executable(example-rlog rlog.ex.cpp)
-target_link_libraries(example-rlog PRIVATE utils)
-code_analysis(example-rlog PRIVATE)
+add_executable(example-log log.ex.cpp)
+target_link_libraries(example-log PRIVATE utils)
+code_analysis(example-log PRIVATE)
 
 install(TARGETS utils
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

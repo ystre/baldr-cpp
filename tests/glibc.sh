@@ -10,7 +10,7 @@ TEST_PROJECT="${SCRIPT_DIR}/make-project"
 CONFIG_FILE="${TEST_PROJECT}/.baldr.yaml"
 IMAGE="baldr-glibc-test"
 
-export SPDLOG_MODE=standard
+export BALDR_LOG_FORMAT=timestamped
 
 function glibc_version_of() {
     if [[ -z "$1" ]]; then

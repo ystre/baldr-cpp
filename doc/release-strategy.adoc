@@ -1,0 +1,87 @@
+= Release Strategy
+
+== Philosophy
+
+Releases are on-demand, not continuous. The project is explicitly *not* aiming
+for "every commit on `master` is releasable" — `master` is just where
+development happens; a release is a separate, deliberate action that stamps
+one specific commit as "this is what we ship."
+
+This splits into two independent steps that happen at different times:
+
+* *Version bump* — happens continuously, as part of the normal change
+  workflow, whenever a change is release-relevant (see below). Handled by
+  `tools/bump-version.sh`, already in place.
+* *Tagging* — happens on demand, whenever someone decides to cut a release.
+  Tagging does not bump anything; it stamps whatever `BALDR_VERSION` already
+  is at the chosen commit. Handled by `ci/tag-release.sh` (this doc).
+
+Keeping these separate means the root `VERSION` file always reflects "the
+next version, if we were to release right now" — useful on its own (e.g.
+`baldr -v` on a plain `master` checkout) — without forcing a tag, a
+changelog entry, or a published artifact for every single change.
+
+== What counts as "release-relevant"
+
+A change should trigger a version bump (and counts towards "is there
+something new to release?") if it can change `baldr`'s behavior or how it's
+built:
+
+* `baldr/`, `libutl/` — the tool's own source.
+* `cmake/`, `CMakeLists.txt`, `settings.cmake`, `dependencies.cmake` — build
+  configuration.
+* `conanfile.txt` — Conan dependencies.
+* `deps/` — submodules (e.g. bumping the `deps/nova-cpp` pointer).
+
+Everything else — `doc/`, `tools/`, `ci/`, `tests/`, `README.md`, and the
+root `VERSION` file itself (a bump is the *consequence* of a
+release-relevant change, not one on its own) — is not release-relevant: it
+doesn't change what gets shipped.
+
+This list lives in one place, `tools/release-paths.sh`, as a plain array so it
+can be sourced by both the version-bump check and the tagging script instead
+of drifting between two copies.
+
+== Versioning scheme
+
+Semantic versioning (`MAJOR.MINOR.PATCH`), bumped via
+`tools/bump-version.sh [major|minor|patch|auto]`. `auto` reads the latest
+commit message (Conventional Commits): `!` after the type/scope or a
+`BREAKING CHANGE` footer bumps major, `feat:` bumps minor, anything else
+bumps patch.
+
+== Cutting a release
+
+1. Pick the commit on `master` to release (usually just the tip).
+2. Run `ci/tag-release.sh`. It:
+   * Reads the version from the `VERSION` file at that commit.
+   * Refuses if `v<version>` is already tagged.
+   * Refuses if nothing release-relevant changed since the previous release
+     tag (use `--force` to override, e.g. for a re-release).
+   * Creates an annotated tag `v<version>` on the chosen commit.
+3. Push the tag: `ci/tag-release.sh --push`, or `git push origin
+   v<version>` separately. Pushing is opt-in and separate from tagging
+   itself, so running the script locally never surprises anyone by pushing.
+
+`ci/tag-release.sh --check` runs only the "is there anything
+release-relevant to release?" sanity check, without tagging.
+
+== Future CI integration
+
+The script is non-interactive, idempotent, and side-effect-scoped (no push
+unless `--push` is passed), so wiring it into a workflow later should be a
+one-line step, e.g. a manually triggered (`workflow_dispatch`) job:
+
+[source,yaml]
+----
+- name: Tag release
+  run: ci/tag-release.sh --push
+----
+
+`workflow_dispatch` (a manual button) is the natural trigger here, matching
+the on-demand model — not `push: master`, which would tag automatically on
+every merge.
+
+A later addition, not needed yet: once a `v*` tag is pushed, a second
+workflow (triggered `on: push: tags: ['v*']`) can build, package
+(`ci/package.sh`) and publish a GitHub Release from it.
