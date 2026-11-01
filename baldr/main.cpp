@@ -390,8 +390,9 @@ void resolve_command(options& opts, const std::string& cmd) {
         *opts.image,
         argv,
         baldr::container_config {
-            mounts,
-            user
+            .mounts = mounts,
+            .user = user,
+            .env = {}
         }
     );
 }
