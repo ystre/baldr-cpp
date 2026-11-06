@@ -4,8 +4,9 @@
  * The builder. Contains the business logic.
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Junie)
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-11-06
+ * @status      Clean
  */
 
 #pragma once
@@ -84,6 +85,7 @@ private:
     std::optional<std::string> m_build_dir_override;
     std::map<std::string, std::string> m_cmake_defines;
     std::map<std::string, std::string> m_cmake_env;
+    rules_t m_classifier_rules;
     std::string m_debugger;
     std::vector<std::string> m_debugger_args;
     project_type m_project_type { project_type::make };

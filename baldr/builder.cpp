@@ -1,3 +1,14 @@
+/**
+ * Part of Baldr
+ *
+ * The builder. Contains the business logic.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-12
+ * @updated     2026-11-06
+ * @status      Clean
+ */
+
 #include <baldr/builder.hpp>
 #include <baldr/exec.hpp>
 
@@ -255,6 +266,7 @@ builder::builder(
     , m_build_dir_override(std::move(build_dir_override))
     , m_cmake_defines(std::move(cfg.cmake_defines))
     , m_cmake_env(std::move(cfg.env))
+    , m_classifier_rules(std::move(cfg.classifier_rules))
     , m_debugger(std::move(cfg.debugger))
     , m_debugger_args(std::move(cfg.debugger_args))
 {}
@@ -270,7 +282,7 @@ builder::handle_makefile_project(bool clean_build) const -> std::vector<std::str
 
     if (clean_build and fs::exists(fs::path(m_project_dir) / "Makefile")) {
         nova::log::debug("Cleaning Makefile project in `{}`...", m_project_dir);
-        std::ignore = run_streamed({ "make", "clean" }, m_project_dir);
+        std::ignore = run_streamed({ "make", "clean" }, m_project_dir, m_classifier_rules);
     }
 
     return { "make" };
@@ -345,7 +357,7 @@ void builder::configure_cmake(
         configure_cmd.push_back(fmt::format("-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={}", *conan_provider));
     }
 
-    if (auto status = run_streamed(configure_cmd, m_project_dir, m_cmake_env); not status.success()) {
+    if (auto status = run_streamed(configure_cmd, m_project_dir, m_classifier_rules, m_cmake_env); not status.success()) {
         if (status.interrupted()) {
             throw nova::exception("CMake configure interrupted.");
         }
@@ -432,7 +444,7 @@ void builder::build(const std::string& target, bool clean_build) {
     nova::log::debug("Building in `{}`...", m_project_dir);
     discover_project_type();
 
-    auto status = run_streamed(handle_project(target, clean_build), m_project_dir, m_cmake_env);
+    auto status = run_streamed(handle_project(target, clean_build), m_project_dir, m_classifier_rules, m_cmake_env);
     if (status.success()) {
         utl::log::success("Build successful.");
     } else if (status.interrupted()) {

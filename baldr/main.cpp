@@ -4,7 +4,9 @@
  * Baldr CLI entry point.
  *
  * @author      Gábor Krisztián Girhiny
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-11-06
+ * @status      Clean
  */
 
 #include <baldr/builder.hpp>
@@ -357,8 +359,11 @@ void resolve_command(options& opts, const std::string& cmd) {
  * @brief   Run Baldr in a container.
  *
  * The resolved project directory is mounted to `/workspace`, baldr's own binary
- * is mounted in unless disabled via `cfg.docker_mount_baldr`, and the container
- * process runs as the host's uid:gid.
+ * and shipped files are mounted in unless disabled via `cfg.docker_mount_baldr`,
+ * and the container process runs as the host's uid:gid.
+ *
+ * `share` directory is conditionally mounted as Docker would create a missing
+ * host directory, as root.
  */
 [[nodiscard]] auto run_in_container(const options& opts, const baldr::config& cfg) -> int {
     std::vector<baldr::bind_mount> mounts;
@@ -381,6 +386,14 @@ void resolve_command(options& opts, const std::string& cmd) {
             .container = baldr_path,
             .read_only = true
         });
+
+        if (const auto host_share = baldr::share_dir(host_path); std::filesystem::exists(host_share)) {
+            mounts.push_back({
+                .host = host_share.string(),
+                .container = baldr::share_dir(baldr_path).string(),
+                .read_only = true
+            });
+        }
     }
 
     const auto user = fmt::format("{}:{}", getuid(), getgid());
@@ -392,7 +405,8 @@ void resolve_command(options& opts, const std::string& cmd) {
         baldr::container_config {
             mounts,
             user
-        }
+        },
+        cfg.classifier_rules
     );
 }
 
@@ -402,7 +416,7 @@ void resolve_command(options& opts, const std::string& cmd) {
  * @throws  if the config file fails to load.
  */
 [[nodiscard]] auto load_merged_config(const options& opts) -> baldr::config {
-    auto merged_cfg = baldr::load(opts.project_dir);
+    auto merged_cfg = baldr::load(opts.project_dir, baldr::share_dir(self_exe_path()));
 
     if (opts.build_type_explicit) {
         merged_cfg.build_type = opts.build_type;

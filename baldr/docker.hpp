@@ -4,11 +4,15 @@
  * A minimal Docker Engine API client, used to build/run projects inside a
  * container.
  *
- * @author      Claude Sonnet 5 (Junie)
- * @date        2026-07-12
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-12
+ * @updated     2026-11-06
+ * @status      Prototype
  */
 
 #pragma once
+
+#include <baldr/classifier.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -98,7 +102,7 @@ public:
      *
      * Logs each line at its `classify()`d level.
      */
-    void stream_logs(const std::string& id);
+    void stream_logs(const std::string& id, const rules_t& rules);
 
 private:
     /**
@@ -139,7 +143,8 @@ private:
 [[nodiscard]] int docker_run(
     std::string_view image,
     const std::vector<std::string>& cmd,
-    const container_config& cfg
+    const container_config& cfg,
+    const rules_t& rules
 );
 
 } // namespace baldr

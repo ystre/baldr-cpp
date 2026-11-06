@@ -2,7 +2,7 @@ file(GLOB_RECURSE BALDR_HEADER_FILES "*.hpp")
 
 add_library(builder
     builder.cpp
-    classify.cpp
+    classifier.cpp
     docker.cpp
     config.cpp
     exec.cpp

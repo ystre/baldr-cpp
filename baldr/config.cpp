@@ -57,7 +57,36 @@ namespace {
     return ret;
 }
 
+/**
+ * @brief   The classifier rules in `share_dir`, under the `classifier` key of an
+ *          otherwise empty config.
+ *
+ * @returns an empty map if there is no such file.
+ *
+ * @throws  if there is more than one, or it can't be read, is malformed or is
+ *          not a map.
+ */
+[[nodiscard]] auto read_shipped(const std::filesystem::path& share_dir) -> nova::dyn_value {
+    const auto file = find_config(share_dir, "classifier");
+
+    if (not file) {
+        nova::log::warn("No classifier rules in `{}`, every line of output is logged as info", share_dir.string());
+        return nova::dyn_value::map({ });
+    }
+
+    auto doc = nova::dyn_value::read_config(*file);
+    if (not doc) {
+        throw nova::exception("Failed to read classifier rules: {}", doc.error());
+    }
+
+    return nova::dyn_value::map({ { "classifier", std::move(*doc) } });
+}
+
 } // namespace
+
+auto share_dir(const std::filesystem::path& binary) -> std::filesystem::path {
+    return binary.parent_path().parent_path() / "share" / "baldr";
+}
 
 auto parse(const nova::dyn_value& doc) -> config {
     auto ret = config{ };
@@ -70,6 +99,7 @@ auto parse(const nova::dyn_value& doc) -> config {
         ret.env = text_map(doc, "env");
         ret.docker_mount_baldr = doc.lookup("docker.mount-baldr", ret.docker_mount_baldr);
         ret.docker_baldr_path = doc.find<std::string>("docker.baldr-path");
+        ret.classifier_rules = parse_rules(doc);
     } catch (const nova::exception& ex) {
         throw nova::exception("Config {}", ex.what());
     }
@@ -77,12 +107,12 @@ auto parse(const nova::dyn_value& doc) -> config {
     return ret;
 }
 
-auto find_config(const std::filesystem::path& dir) -> std::optional<std::filesystem::path> {
+auto find_config(const std::filesystem::path& dir, std::string_view stem) -> std::optional<std::filesystem::path> {
     static constexpr auto extensions = std::to_array<std::string_view>({ ".yaml", ".yml", ".json", ".toml" });
 
     auto found = std::vector<std::filesystem::path>{ };
     for (const auto extension : extensions) {
-        auto path = dir / fmt::format(".baldr{}", extension);
+        auto path = dir / fmt::format("{}{}", stem, extension);
         auto ec = std::error_code{ };
 
         const auto present = std::filesystem::exists(path, ec);
@@ -114,7 +144,7 @@ auto find_config(const std::filesystem::path& dir) -> std::optional<std::filesys
 }
 
 auto read(const std::filesystem::path& dir) -> nova::dyn_value {
-    const auto file = find_config(dir);
+    const auto file = find_config(dir, ".baldr");
     if (not file) {
         nova::log::debug("No config in `{}`", dir.string());
         return nova::dyn_value::map({ });
@@ -129,15 +159,15 @@ auto read(const std::filesystem::path& dir) -> nova::dyn_value {
     return std::move(*doc);
 }
 
-auto load(const std::filesystem::path& project_dir) -> config {
+auto load(
+        const std::filesystem::path& project_dir,
+        const std::filesystem::path& share_dir
+) -> config
+{
     const auto home = std::filesystem::path{ nova::getenv("HOME").value() };
     auto global = read(home);
-    return parse(
-        nova::dyn_value::merge(
-            std::move(global),
-            read(project_dir)
-        )
-    );
+    const auto user = nova::dyn_value::merge(std::move(global), read(project_dir));
+    return parse(nova::dyn_value::merge(read_shipped(share_dir), user));
 }
 
 } // namespace baldr

@@ -5,7 +5,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-10-31
+ * @updated     2026-11-06
  * @status      Prototype
  *
  * This module sets up the default `spdlog` logger from a few orthogonal
@@ -69,7 +69,8 @@ struct settings_t {
     std::optional<std::filesystem::path> file_dir; ///< No log file when empty.
     format_e file_format = format_e::epoch;
     std::size_t window_size = 10;                  ///< `view_e::window` only.
-    std::size_t line_max = 160;                    ///< `view_e::digest` only.
+    std::size_t line_width = 160;                  ///< `view_e::digest` only.
+    std::size_t digest_lines = 20;                 ///< `view_e::digest` only, for each of errors and warnings.
 
     auto operator==(const settings_t&) const -> bool = default;
 };
@@ -174,15 +175,19 @@ private:
  * @brief   A spdlog sink printing warnings and errors as one-liners.
  *
  * Records below `warn` are dropped. Each line is stripped of ANSI escapes,
- * capped to `line_max` characters, and printed only the first time it occurs.
+ * capped to `line_width` characters, and printed only the first time it occurs.
+ *
+ * At most `level_max` errors and `level_max` warnings are printed, separately
+ * so that warnings cannot crowd out the errors. The rest are only counted.
  *
  * `success()`/`failure()` print a summary with the counts and the log file
  * (with the complete log) path, then reset the counts.
  */
 class digest_sink : public spdlog::sinks::base_sink<std::mutex> {
 public:
-    explicit digest_sink(std::size_t line_max)
-        : m_line_max(line_max)
+    digest_sink(std::size_t line_width, std::size_t level_max)
+        : m_line_width(line_width)
+        , m_level_max(level_max)
     {}
 
     void success(const std::string& msg = "");
@@ -206,12 +211,14 @@ private:
         std::size_t errors = 0;
         std::size_t warnings = 0;
         std::size_t repeats = 0;
+        std::size_t hidden = 0;
     };
 
     void summary(const std::string& msg);
 
     std::string m_root_prefix;
-    std::size_t m_line_max;
+    std::size_t m_line_width;
+    std::size_t m_level_max;
 
     stats_t m_stats;
     std::unordered_set<std::string> m_seen;
@@ -224,7 +231,7 @@ private:
  * Precedence, highest first:
  * - `<NAME>_LOG_FORMAT`, `<NAME>_LOG_VIEW`, `<NAME>_LOG_FILE` (a directory,
  *   empty for none), `<NAME>_LOG_FILE_FORMAT`, `<NAME>_LOG_WINDOW_SIZE`,
- *   `<NAME>_LOG_LINE_MAX`, named by `utl::env_name()`
+ *   `<NAME>_LOG_LINE_WIDTH`, `<NAME>_LOG_DIGEST_LINES`, named by `utl::env_name()`
  * - defaults: plain stream, epoch-formatted file in `/tmp/<name>-logs`
  *
  * Invalid values are reported and ignored. The level is not part of the

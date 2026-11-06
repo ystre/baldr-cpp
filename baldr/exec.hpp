@@ -5,11 +5,13 @@
  * `batch_runner`.
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Junie)
- * @date        2026-08-11
+ * @created     2026-08-11
+ * @updated     2026-11-06
  */
 
 #pragma once
+
+#include <baldr/classifier.hpp>
 
 #include <libutl/command.hpp>
 
@@ -38,6 +40,7 @@ namespace baldr {
 [[nodiscard]] auto run_streamed(
     const std::vector<std::string>& args,
     const std::string& working_directory,
+    const rules_t& rules,
     const std::map<std::string, std::string>& env = {}
 ) -> utl::command::exit_status;
 

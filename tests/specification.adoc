@@ -4,6 +4,15 @@
 
 The script `run.sh` is the runner for all test suites.
 
+=== Classifier rules
+
+**Tool**: `classifier-check`, built from `classifier-check.cpp`
+
+**Description**: Checks the shipped `res/classifier.toml` against the lines of
+known level in `classifier-lines.txt`, without running Baldr. A new marker in the
+rules gets a line there. The classifier's logic has unit tests with rules of
+their own, so they don't depend on the shipped file.
+
 === Smoke tests
 
 **Script**: `smoke.sh`

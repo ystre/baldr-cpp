@@ -24,6 +24,12 @@ set(BALDR_PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}")
 add_subdirectory(libutl)
 add_subdirectory(baldr)
 
+install(DIRECTORY res/ DESTINATION "${CMAKE_INSTALL_DATADIR}/baldr" COMPONENT baldr)
+
+# The build tree has the layout of the install tree, so a built `baldr` finds them
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}")
+file(CREATE_LINK "${BALDR_PROJECT_ROOT}/res" "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/baldr" SYMBOLIC)
+
 if(BUILD_TESTING)
-    # Root tests if any
+    add_subdirectory(tests)
 endif()

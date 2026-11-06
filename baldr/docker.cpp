@@ -1,6 +1,16 @@
-#include <baldr/docker.hpp>
+/**
+ * Part of Baldr
+ *
+ * A minimal Docker Engine API client, used to build/run projects inside a
+ * container.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-12
+ * @updated     2026-11-06
+ * @status      Prototype
+ */
 
-#include <baldr/classify.hpp>
+#include <baldr/docker.hpp>
 
 #include <libutl/line_reader.hpp>
 #include <libutl/log.hpp>
@@ -153,7 +163,7 @@ int docker_client::wait_container(const std::string& id) {
     return response["StatusCode"].get<int>();
 }
 
-void docker_client::stream_logs(const std::string& id) {
+void docker_client::stream_logs(const std::string& id, const rules_t& rules) {
     const auto path = fmt::format("{}/containers/{}/logs?stdout=1&stderr=1&follow=1", api_prefix(), id);
 
     http::request<http::empty_body> req{ http::verb::get, path, 11 };
@@ -172,7 +182,7 @@ void docker_client::stream_logs(const std::string& id) {
     // buffered instead of waiting for the whole response to finish.
     std::string pending;
     std::array<char, 4096> chunk{};
-    utl::line_reader lines([](std::string& line) { log_output(line); });
+    utl::line_reader lines([&rules](std::string& line) { log_output(rules, line); });
 
     while (not parser.is_done()) {
         parser.get().body().data = chunk.data();
@@ -207,7 +217,8 @@ void docker_client::stream_logs(const std::string& id) {
 int docker_run(
     std::string_view image,
     const std::vector<std::string>& cmd,
-    const container_config& cfg
+    const container_config& cfg,
+    const rules_t& rules
 ) {
     docker_client client;
 
@@ -224,7 +235,7 @@ int docker_run(
 
     const auto id = client.create_container(image, cmd, container_cfg);
     client.start_container(id);
-    client.stream_logs(id);
+    client.stream_logs(id, rules);
 
     const int status = client.wait_container(id);
     if (status == 0) {

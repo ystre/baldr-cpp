@@ -15,12 +15,15 @@
 
 #pragma once
 
+#include <baldr/classifier.hpp>
+
 #include <libnova/dyn_value.hpp>
 
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace baldr {
@@ -38,7 +41,16 @@ struct config {
 
     bool docker_mount_baldr = true;
     std::optional<std::string> docker_baldr_path;
+
+    rules_t classifier_rules;
 };
+
+/**
+ * @brief   The directory of the files shipped with the Baldr binary at `binary`.
+ *
+ * `<prefix>/share/baldr` beside the directory of the binary.
+ */
+[[nodiscard]] auto share_dir(const std::filesystem::path& binary) -> std::filesystem::path;
 
 /**
  * @brief   Parse a `config` out of `doc`.
@@ -53,17 +65,17 @@ struct config {
 [[nodiscard]] auto parse(const nova::dyn_value& doc) -> config;
 
 /**
- * @brief   The config file in `dir`: `.baldr.yaml`, `.baldr.yml`, `.baldr.json`
- *          or `.baldr.toml`.
+ * @brief   The config file `stem` in `dir`, with the extension `.yaml`, `.yml`,
+ *          `.json` or `.toml`.
  *
  * @returns empty if there is none.
  *
  * @throws  if there is more than one, or `dir` can't be searched.
  */
-[[nodiscard]] auto find_config(const std::filesystem::path& dir) -> std::optional<std::filesystem::path>;
+[[nodiscard]] auto find_config(const std::filesystem::path& dir, std::string_view stem) -> std::optional<std::filesystem::path>;
 
 /**
- * @brief   Read the config file in `dir`, see `find_config`.
+ * @brief   Read the `.baldr` config file in `dir`, see `find_config`.
  *
  * @returns an empty map if there is none, or it is empty.
  *
@@ -75,11 +87,20 @@ struct config {
 /**
  * @brief   Load the config for `project_dir`.
  *
- * The global config (in `$HOME`) merged with the project-local one (in
- * `project_dir`). Each can be in any format, independently of the other.
+ * Order of config merging:
+ * - The files shipped in `share_dir`
+ * - global config (in `$HOME`)
+ * - project-local one (in `project_dir`)
+ *
+ * Each can be in any format, independently of the others.
+ *
+ * Missing the shipped classifier rules results in a warning.
  *
  * @throws  if a config file fails to load.
  */
-[[nodiscard]] auto load(const std::filesystem::path& project_dir) -> config;
+[[nodiscard]] auto load(
+    const std::filesystem::path& project_dir,
+    const std::filesystem::path& share_dir
+) -> config;
 
 } // namespace baldr

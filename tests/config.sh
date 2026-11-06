@@ -133,4 +133,72 @@ if [[ "$(id -u)" -ne 0 ]]; then
     expect_error "Cannot access \`${FAKE_HOME}/.baldr.yaml\`"
 fi
 
+echo "Config: classifier rules"
+
+# Runs `hello` with the digest view, which shows only errors and warnings
+function digest() {
+    BALDR_LOG_VIEW=digest baldr run -t hello --build-dir "${BUILD_DIR}" 2>&1
+}
+
+setup
+echo 'not_a_cmake_command()' >> "${PROJECT}/CMakeLists.txt"
+output=$(BALDR_LOG_VIEW=digest baldr build --build-dir "${BUILD_DIR}" 2>&1) && fail "baldr succeeded: ${output}"
+grep -qF "CMake Error" <<< "${output}" || fail "expected the shipped rules to catch \`CMake Error\` in: ${output}"
+
+setup
+cat > "${PROJECT}/.baldr.toml" <<EOF
+[cmake.definitions]
+BALDR_TEST_DEFINE = 'classified'
+
+[classifier]
+use = ['hello']
+
+[[classifier.sets.hello]]
+level = 'error'
+contains = ['BALDR_TEST_DEFINE=classified']
+EOF
+output=$(digest) || fail "baldr failed: ${output}"
+grep -qxF "BALDR_TEST_DEFINE=classified" <<< "${output}" || fail "expected the project's rule to match in: ${output}"
+
+setup
+printf "[classifier]\nuse = ['missing']\n" > "${PROJECT}/.baldr.toml"
+expect_error "Config \`classifier.use\`: unknown set \`missing\`"
+
+# A copy of the binary, away from the rules of the build tree
+function alone() {
+    HOME="${FAKE_HOME}" "${WORK_DIR}/alone/bin/baldr" -p "${PROJECT}" "$@"
+}
+
+setup
+rm -rf "${WORK_DIR}/alone"
+mkdir -p "${WORK_DIR}/alone/bin"
+cp "${BALDR}" "${WORK_DIR}/alone/bin/baldr"
+output=$(alone build --build-dir "${BUILD_DIR}" 2>&1) \
+    || fail "baldr failed without the shipped rules: ${output}"
+grep -qF "No classifier rules in" <<< "${output}" || fail "expected a warning in: ${output}"
+
+output=$(BALDR_LOG_VIEW=digest alone build --build-dir "${BUILD_DIR}" 2>&1) \
+    || fail "baldr failed in digest view without the shipped rules: ${output}"
+grep -qF "No classifier rules in" <<< "${output}" || fail "expected the digest to show the warning in: ${output}"
+
+setup
+mkdir -p "${WORK_DIR}/alone/share/baldr"
+printf 'use: [custom]\nsets:\n  custom:\n    - level: error\n      contains: [not_a_cmake_command]\n' \
+    > "${WORK_DIR}/alone/share/baldr/classifier.yaml"
+echo 'not_a_cmake_command()' >> "${PROJECT}/CMakeLists.txt"
+output=$(BALDR_LOG_VIEW=digest alone build --build-dir "${BUILD_DIR}" 2>&1) && fail "baldr succeeded: ${output}"
+grep -qF "not_a_cmake_command" <<< "${output}" || fail "expected rules read from YAML to match in: ${output}"
+
+touch "${WORK_DIR}/alone/share/baldr/classifier.toml"
+output=$(alone build --build-dir "${BUILD_DIR}" 2>&1) && fail "baldr succeeded: ${output}"
+grep -qF "Multiple config files in" <<< "${output}" || fail "expected an error about the two files in: ${output}"
+echo "Config: digest line limit"
+
+setup
+printf 'message(SEND_ERROR "one")\nmessage(SEND_ERROR "two")\n' >> "${PROJECT}/CMakeLists.txt"
+output=$(BALDR_LOG_DIGEST_LINES=1 BALDR_LOG_VIEW=digest baldr build --build-dir "${BUILD_DIR}" 2>&1) \
+    && fail "baldr succeeded: ${output}"
+[[ $(grep -cF "CMake Error at" <<< "${output}") -eq 1 ]] || fail "expected a single error line in: ${output}"
+grep -qE "[0-9]+ not shown" <<< "${output}" || fail "expected the summary to count the rest in: ${output}"
+
 echo "Config: all passed"
