@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Tags a commit as a release: creates an annotated git tag `v<version>` from
-# the version currently set in the root `VERSION` file.
+# the version currently set in `version.txt`.
 #
 # Usage:
 #   ci/tag-release.sh [--push] [--force] [<ref>]
@@ -20,10 +20,9 @@ echo "=== Stage: Tag ==="
 
 source "${WORKSPACE}/tools/release-paths.sh"
 
-# Version in the `VERSION` file as of $1 (a ref, default: the ref being tagged).
+# Version as of $1 (a ref, default: the ref being tagged).
 current_version() {
-    local ref="${1:-${REF}}"
-    git -C "${WORKSPACE}" show "${ref}:VERSION"
+    version_at "${1:-${REF}}"
 }
 
 # Most recent release tag, or empty if there isn't one yet.

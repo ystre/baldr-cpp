@@ -4,7 +4,7 @@ if(CMAKE_BINARY_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     message(FATAL_ERROR "Building in-source is not supported! Create a build dir and remove ${CMAKE_SOURCE_DIR}/CMakeCache.txt")
 endif()
 
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" BALDR_VERSION)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" BALDR_VERSION)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS VERSION)
 project("baldr" VERSION ${BALDR_VERSION} LANGUAGES CXX)
 message(STATUS "Baldr version ${BALDR_VERSION}")
