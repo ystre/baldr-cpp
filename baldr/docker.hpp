@@ -1,13 +1,16 @@
 /**
  * Part of Baldr
  *
- * A minimal Docker Engine API client, used to build/run projects inside a
- * container.
+ * @brief   A minimal Docker Engine API client.
+ *
+ * Used to build/run projects inside a container.
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
  * @updated     2026-11-06
- * @status      Prototype
+ * @status      experimental
+ * @reviewed    none
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #pragma once

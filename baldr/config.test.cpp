@@ -1,3 +1,15 @@
+/**
+ * Part of Baldr
+ *
+ * @brief   Tests of `config.hpp`.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-09-19
+ * @updated     2026-10-31
+ * @reviewed    skimmed
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 

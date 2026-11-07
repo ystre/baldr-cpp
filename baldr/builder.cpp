@@ -1,12 +1,14 @@
 /**
  * Part of Baldr
  *
- * The builder. Contains the business logic.
+ * @brief   The builder. Contains the business logic.
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
  * @updated     2026-11-06
- * @status      Clean
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <baldr/builder.hpp>

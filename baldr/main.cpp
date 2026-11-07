@@ -1,12 +1,14 @@
 /**
- * Part of Baldr.
+ * Part of Baldr
  *
- * Baldr CLI entry point.
+ * @brief   Baldr CLI entry point.
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
  * @updated     2026-11-07
- * @status      Clean
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <baldr/builder.hpp>

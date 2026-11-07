@@ -1,3 +1,15 @@
+/**
+ * Part of Utility Library
+ *
+ * @brief   Tests of `log.hpp`.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-10-28
+ * @updated     2026-11-06
+ * @reviewed    skimmed
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <libutl/log.hpp>
 
 #include <gtest/gtest.h>

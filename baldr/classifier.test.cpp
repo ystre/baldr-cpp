@@ -1,3 +1,15 @@
+/**
+ * Part of Baldr
+ *
+ * @brief   Tests of `classifier.hpp`.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-11-06
+ * @updated     2026-11-06
+ * @reviewed    skimmed
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <baldr/classifier.hpp>
 
 #include <libnova/dyn_value.hpp>

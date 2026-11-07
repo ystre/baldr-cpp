@@ -1,11 +1,13 @@
 /**
  * Part of Utility Library
  *
- * Example application demonstrating `utl::command`
+ * @brief   Example application demonstrating `utl::command`
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Junie)
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-09-19
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  *
  * Spawning a child process and streaming its combined stdout/stderr output
  * line-by-line via `utl::line_reader`.

@@ -6,7 +6,9 @@
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
  * @updated     2026-11-06
- * @status      Prototype
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <libutl/log.hpp>

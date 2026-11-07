@@ -10,7 +10,9 @@
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-19
  * @updated     2026-11-06
- * @status      Clean
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #pragma once

@@ -1,3 +1,15 @@
+/**
+ * Part of Utility Library
+ *
+ * @brief   Tests of `line_reader.hpp`.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-09-19
+ * @updated     2026-09-19
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <gtest/gtest.h>
 #include <libutl/line_reader.hpp>
 

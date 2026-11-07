@@ -6,7 +6,9 @@
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
  * @updated     2026-11-06
- * @status      Prototype
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  *
  * This module sets up the default `spdlog` logger from a few orthogonal
  * `settings_t`: the line format, the terminal view (plain stream, a scrolling
@@ -19,7 +21,6 @@
  * - `window_sink` as a `spdlog` adapter using `window`.
  * - `digest_sink` for minimal logging. Primary use-case is for agents to
  *   minimize context.
- *
  */
 
 #pragma once

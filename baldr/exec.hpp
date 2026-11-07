@@ -1,12 +1,16 @@
 /**
  * Part of Baldr
  *
- * Shared subprocess-streaming helper, used by both `builder` (build/run) and
- * `batch_runner`.
+ * @brief   Shared subprocess-streaming helper.
+ *
+ * Used by both `builder` (build/run) and `batch_runner`.
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-08-11
  * @updated     2026-11-06
+ * @status      evolving
+ * @reviewed    skimmed
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #pragma once

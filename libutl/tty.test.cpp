@@ -1,3 +1,15 @@
+/**
+ * Part of Utility Library
+ *
+ * @brief   Tests of `tty.hpp`.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-09-19
+ * @updated     2026-10-28
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <libutl/tty.hpp>
 
 #include <gtest/gtest.h>

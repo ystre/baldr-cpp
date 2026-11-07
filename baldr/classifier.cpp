@@ -6,7 +6,9 @@
  * @author      Gábor Krisztián Girhiny
  * @created     2026-10-28
  * @updated     2026-11-06
- * @status      Clean
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <baldr/classifier.hpp>
