@@ -13,10 +13,10 @@ include(dependencies.cmake)
 
 include(novaCompilerWarnings)
 include(novaCompilerSettings)
+include(novaBuildInfo)
 
 include(settings.cmake)
 
-include(cmake/git-version.cmake)
 include(cmake/test.cmake)
 
 set(BALDR_PROJECT_ROOT "${CMAKE_CURRENT_LIST_DIR}")

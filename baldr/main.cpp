@@ -5,13 +5,14 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-07
  * @status      Clean
  */
 
 #include <baldr/builder.hpp>
 #include <baldr/config.hpp>
 #include <baldr/docker.hpp>
+#include <baldr/gen/build_info.hpp>
 
 #include <libutl/log.hpp>
 #include <libutl/signal.hpp>
@@ -44,37 +45,13 @@ namespace po = boost::program_options;
 
 namespace {
 
-#ifndef BALDR_VERSION
-#define BALDR_VERSION "unknown"
-#endif
-
-#ifndef BALDR_GIT_HASH
-#define BALDR_GIT_HASH "unknown"
-#endif
-
-#ifndef BALDR_GIT_BRANCH
-#define BALDR_GIT_BRANCH "unknown"
-#endif
-
-#ifndef BALDR_GIT_DIRTY
-#define BALDR_GIT_DIRTY "unknown"
-#endif
-
 [[nodiscard]] auto baldr_version() {
-    const std::string dirty_suffix = std::string{BALDR_GIT_DIRTY} == "dirty" ? ".dirty" : "";
 #ifdef BALDR_STATIC_LINK
     constexpr std::string_view linkage = "static";
 #else
     constexpr std::string_view linkage = "dynamic";
 #endif
-    return fmt::format(
-        "baldr v{}+{}.{}{} ({})",
-        BALDR_VERSION,
-        BALDR_GIT_HASH,
-        BALDR_GIT_BRANCH,
-        dirty_suffix,
-        linkage
-    );
+    return fmt::format("baldr v{} ({})", baldr::full_version(), linkage);
 }
 
 /**

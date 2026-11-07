@@ -32,15 +32,6 @@ if(BALDR_STATIC_LINK)
     target_compile_definitions(baldr PRIVATE BALDR_STATIC_LINK)
 endif()
 
-project_git_hash(BALDR_GIT_HASH)
-project_git_branch(BALDR_GIT_BRANCH)
-project_git_dirty(BALDR_GIT_DIRTY)
-
-target_compile_definitions(baldr PRIVATE
-    BALDR_VERSION="${BALDR_VERSION}"
-    BALDR_GIT_HASH="${BALDR_GIT_HASH}"
-    BALDR_GIT_BRANCH="${BALDR_GIT_BRANCH}"
-    BALDR_GIT_DIRTY="${BALDR_GIT_DIRTY}"
-)
+nova_target_build_info(baldr NAMESPACE baldr)
 
 install(TARGETS baldr COMPONENT baldr)
