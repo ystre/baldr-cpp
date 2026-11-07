@@ -1,0 +1,42 @@
+# Lines of output and the level `res/classifier.toml` gives them, see
+# `classifier-check.cpp`.
+
+# gcc
+error src/a.cpp:48:24: error: 'tty' has not been declared
+error src/a.cpp:1:10: fatal error: x.hpp: No such file or directory
+warning a.cpp:3:9: warning: unused variable 'x' [-Wunused-variable]
+
+# linker
+error /usr/bin/ld: main.o: undefined reference to `foo()'
+error /usr/bin/ld: b.o: multiple definition of `foo()'
+error clang: error: linker command failed with exit code 1
+
+# make
+error make[2]: *** [CMakeFiles/a.dir/build.make:76: a.o] Error 1
+info make[2]: *** Waiting for unfinished jobs....
+
+# ninja
+error FAILED: CMakeFiles/a.dir/a.cpp.o
+error ninja: build stopped: subcommand failed.
+
+# cmake
+error CMake Error at CMakeLists.txt:3 (add_executable):
+warning CMake Warning (dev) at CMakeLists.txt:1:
+warning CMake Deprecation Warning at CMakeLists.txt:1:
+
+# gtest, ctest
+error [  FAILED  ] Suite.Case (0 ms)
+error 75% tests passed, 1 tests failed out of 4
+error 1/4 Test #1: a ................***Failed    0.01 sec
+
+# sanitizers
+error ==1==ERROR: AddressSanitizer: heap-use-after-free on address 0x1
+error a.cpp:3:4: runtime error: signed integer overflow
+
+# Matches across sets, decided by the order of `use`
+error /usr/bin/ld: warning: multiple definition of `foo()'
+error CMake Warning at a.cmake:3 (message): a.cpp:1:1: error: bad
+
+# The rest
+info [ 42%] Building CXX object a.cpp.o
+info -- Configuring done

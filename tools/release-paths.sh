@@ -7,6 +7,7 @@ RELEASE_RELEVANT_PATHS=(
     'cmake'
     'deps'
     'libutl'
+    'res'
     'CMakeLists.txt'
     'conanfile.txt'
     'dependencies.cmake'

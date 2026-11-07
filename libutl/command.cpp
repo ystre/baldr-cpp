@@ -1,3 +1,16 @@
+/**
+ * Part of Utility Library
+ *
+ * @brief   Process spawning.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-12
+ * @updated     2026-09-19
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <libutl/command.hpp>
 
 #include <fmt/format.h>

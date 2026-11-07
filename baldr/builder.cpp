@@ -1,3 +1,16 @@
+/**
+ * Part of Baldr
+ *
+ * @brief   The builder. Contains the business logic.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-12
+ * @updated     2026-11-06
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <baldr/builder.hpp>
 #include <baldr/exec.hpp>
 
@@ -7,6 +20,7 @@
 #include <libutl/signal.hpp>
 
 #include <libnova/error.hpp>
+#include <libnova/io.hpp>
 #include <libnova/log.hpp>
 #include <libnova/utils.hpp>
 
@@ -186,6 +200,43 @@ void link_compile_commands(const std::string& project_dir, const std::string& bu
 }
 
 /**
+ * @brief   The contents of the marker file in `build_dir`; empty if there is
+ *          none.
+ */
+[[nodiscard]] auto read_marker(const fs::path& build_dir) -> std::string {
+    return nova::read_file((build_dir / DefinesMarkerFile).string()).value_or(std::string{ });
+}
+
+/**
+ * @brief   The keys in the defines section of `recorded`, a marker file's
+ *          contents, that are no longer in `defines`.
+ */
+[[nodiscard]] auto dropped_defines(
+        const std::string& recorded,
+        const std::map<std::string, std::string>& defines
+) -> std::vector<std::string> {
+    auto ret = std::vector<std::string>{ };
+    auto lines = std::istringstream{ recorded };
+
+    for (auto line = std::string{ }; std::getline(lines, line) and line != "--env--"; ) {
+        const auto separator = line.find('=');
+
+        // A line without one is the continuation of a multi-line value
+        if (separator == std::string::npos) {
+            continue;
+        }
+
+        auto key = line.substr(0, separator);
+
+        if (not defines.contains(key)) {
+            ret.push_back(std::move(key));
+        }
+    }
+
+    return ret;
+}
+
+/**
  * @brief   Whether `build_dir` needs a (re-)configure: missing cache,
  *          missing marker file, or a marker mismatch against
  *          `resolved_defines`.
@@ -197,10 +248,7 @@ needs_cmake_configure(const fs::path& build_dir, const std::string& resolved_def
         || not fs::exists(build_dir / DefinesMarkerFile);
 
     if (not needs_configure) {
-        std::ifstream marker(build_dir / DefinesMarkerFile);
-        std::ostringstream recorded;
-        recorded << marker.rdbuf();
-        needs_configure = recorded.str() != resolved_defines;
+        needs_configure = read_marker(build_dir) != resolved_defines;
     }
 
     return needs_configure;
@@ -220,6 +268,7 @@ builder::builder(
     , m_build_dir_override(std::move(build_dir_override))
     , m_cmake_defines(std::move(cfg.cmake_defines))
     , m_cmake_env(std::move(cfg.env))
+    , m_classifier_rules(std::move(cfg.classifier_rules))
     , m_debugger(std::move(cfg.debugger))
     , m_debugger_args(std::move(cfg.debugger_args))
 {}
@@ -235,7 +284,7 @@ builder::handle_makefile_project(bool clean_build) const -> std::vector<std::str
 
     if (clean_build and fs::exists(fs::path(m_project_dir) / "Makefile")) {
         nova::log::debug("Cleaning Makefile project in `{}`...", m_project_dir);
-        std::ignore = run_streamed({ "make", "clean" }, m_project_dir);
+        std::ignore = run_streamed({ "make", "clean" }, m_project_dir, m_classifier_rules);
     }
 
     return { "make" };
@@ -273,6 +322,9 @@ builder::handle_cmake_project(const std::string& target, bool clean_build) const
  * @brief   Run `cmake`'s configure step for `build_dir_rel`, then
  *          record `resolved_defines` in the marker file.
  *
+ * Defines recorded by the previous configure but gone since are unset via `-U`.
+ * CMake would keep them in its cache otherwise.
+ *
  * @throws  nova::exception if the configure command fails.
  */
 void builder::configure_cmake(
@@ -287,9 +339,14 @@ void builder::configure_cmake(
         "cmake",
         "-S", ".",
         "-B", build_dir_rel,
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        fmt::format("-DCMAKE_BUILD_TYPE={}", m_build_type)
     };
+
+    for (const auto& key : dropped_defines(read_marker(build_dir), m_cmake_defines)) {
+        configure_cmd.push_back(fmt::format("-U{}", key));
+    }
+
+    configure_cmd.push_back("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON");
+    configure_cmd.push_back(fmt::format("-DCMAKE_BUILD_TYPE={}", m_build_type));
 
     nova::log::debug("CMake command: `{}`", fmt::join(configure_cmd, " "));
 
@@ -302,7 +359,7 @@ void builder::configure_cmake(
         configure_cmd.push_back(fmt::format("-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={}", *conan_provider));
     }
 
-    if (auto status = run_streamed(configure_cmd, m_project_dir, m_cmake_env); not status.success()) {
+    if (auto status = run_streamed(configure_cmd, m_project_dir, m_classifier_rules, m_cmake_env); not status.success()) {
         if (status.interrupted()) {
             throw nova::exception("CMake configure interrupted.");
         }
@@ -389,7 +446,7 @@ void builder::build(const std::string& target, bool clean_build) {
     nova::log::debug("Building in `{}`...", m_project_dir);
     discover_project_type();
 
-    auto status = run_streamed(handle_project(target, clean_build), m_project_dir, m_cmake_env);
+    auto status = run_streamed(handle_project(target, clean_build), m_project_dir, m_classifier_rules, m_cmake_env);
     if (status.success()) {
         utl::log::success("Build successful.");
     } else if (status.interrupted()) {

@@ -1,227 +1,175 @@
+/**
+ * Part of Baldr
+ *
+ * @brief   Configuration loading.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-07-19
+ * @updated     2026-11-06
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <baldr/config.hpp>
 
+#include <libnova/dyn_value.hpp>
 #include <libnova/error.hpp>
 #include <libnova/log.hpp>
 #include <libnova/utils.hpp>
-#include <libnova/yaml.hpp>
 
-#include <algorithm>
-#include <optional>
-#include <regex>
-#include <sstream>
-#include <string>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+
+#include <array>
 #include <filesystem>
+#include <map>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace baldr {
 
 namespace {
 
 /**
- * @brief   Replace every `${KEY}` occurrence in `value` with whatever
- *          `lookup(KEY)` returns, leaving unresolved references untouched.
- */
-[[nodiscard]] auto interpolate(const std::string& value, const auto& lookup) -> std::string {
-    static const std::regex ref{ R"(\$\{([A-Za-z_][A-Za-z0-9_]*)\})" };
-
-    std::string result;
-    auto begin = std::sregex_iterator(value.begin(), value.end(), ref);
-    auto end = std::sregex_iterator();
-    std::size_t last = 0;
-
-    for (auto it = begin; it != end; ++it) {
-        const auto& match = *it;
-
-        result.append(value, last, static_cast<std::size_t>(match.position()) - last);
-        if (auto resolved = lookup(match[1].str())) {
-            result += *resolved;
-        } else {
-            throw nova::exception("Variable `{}` is undefined", match[1].str());
-        }
-        last = static_cast<std::size_t>(match.position() + match.length());
-    }
-    result.append(value, last, std::string::npos);
-
-    return result;
-}
-
-/**
- * @brief   Parse `batch.env` from the configuration.
+ * @brief   The map at `path` with each scalar value as its text.
  *
- * Variables interpolated from the same map.
+ * @throws  if it is not a map, or a value is a map or a sequence.
  */
-auto parse_batch_env(const nova::yaml& doc) -> std::map<std::string, std::string> {
-    if (not doc.contains("batch.env")) {
-        return {};
-    }
+[[nodiscard]] auto text_map(const nova::dyn_value& doc, const nova::dyn_path& path)
+        -> std::map<std::string, std::string>
+{
+    auto ret = std::map<std::string, std::string>{ };
 
-    auto result = std::map<std::string, std::string>{ };
+    for (const auto& [key, item] : doc.lookup<nova::dyn_value::map_t>(path, { })) {
+        const auto& data = item.data();
 
-    auto raw = doc.lookup<std::map>("batch.env");
-    for (auto& [key, value_node] : raw) {
-        auto resolved = interpolate(value_node.as<std::string>(), [&result](const std::string& ref) -> std::optional<std::string> {
-            if (auto it = result.find(ref); it != result.end()) {
-                return it->second;
-            }
-            return std::nullopt;
-        });
-
-        result.insert_or_assign(key, std::move(resolved));
-    }
-
-    return result;
-}
-
-/**
- * @brief   Parse `batch.stages` from the configuration.
- */
-auto parse_batch_stages(const nova::yaml& doc) -> std::map<std::string, batch_stage> {
-    if (not doc.contains("batch.stages")) {
-        return {};
-    }
-
-    auto result = std::map<std::string, batch_stage>{ };
-
-    auto raw = doc.lookup<std::map>("batch.stages");
-    for (auto& [name, node] : raw) {
-        batch_stage stage;
-        stage.cmd = node.lookup<std::string>("cmd");
-        stage.parameters = node.lookup<std::vector<std::string>>("parameters", {});
-        result.insert_or_assign(name, std::move(stage));
-    }
-
-    return result;
-}
-
-/**
- * @brief   Parse `batch.scenarios` from `doc` on top of `scenarios`.
- */
-auto parse_batch_scenarios(const nova::yaml& doc) -> std::map<std::string, std::vector<batch_step>> {
-    if (not doc.contains("batch.scenarios")) {
-        return {};
-    }
-
-    auto result = std::map<std::string, std::vector<batch_step>>{ };
-
-    auto raw = doc.lookup<std::map>("batch.scenarios");
-    for (auto& [name, node] : raw) {
-        std::vector<batch_step> steps;
-        for (const auto& step : node.as<std::vector<std::string>>()) {
-            steps.push_back(parse_step(step));
+        if (std::holds_alternative<nova::dyn_value::map_t>(data) or std::holds_alternative<nova::dyn_value::seq_t>(data)) {
+            throw nova::exception("`{}`: expected a scalar, got {}", path / key, item.type_name());
         }
-        result.insert_or_assign(name, std::move(steps));
+
+        ret.emplace(key, fmt::format("{}", item));
     }
 
-    return result;
+    return ret;
+}
+
+/**
+ * @brief   The classifier rules in `share_dir`, under the `classifier` key of an
+ *          otherwise empty config.
+ *
+ * @returns an empty map if there is no such file.
+ *
+ * @throws  if there is more than one, or it can't be read, is malformed or is
+ *          not a map.
+ */
+[[nodiscard]] auto read_shipped(const std::filesystem::path& share_dir) -> nova::dyn_value {
+    const auto file = find_config(share_dir, "classifier");
+
+    if (not file) {
+        nova::log::warn("No classifier rules in `{}`, every line of output is logged as info", share_dir.string());
+        return nova::dyn_value::map({ });
+    }
+
+    auto doc = nova::dyn_value::read_config(*file);
+    if (not doc) {
+        throw nova::exception("Failed to read classifier rules: {}", doc.error());
+    }
+
+    return nova::dyn_value::map({ { "classifier", std::move(*doc) } });
 }
 
 } // namespace
 
-[[nodiscard]] auto parse_step(const std::string& step) -> batch_step {
-    std::istringstream iss{ step };
-    batch_step result;
-    iss >> result.stage;
-
-    if (result.stage.empty()) {
-        throw nova::exception("Invalid batch scenario step: `{}`", step);
-    }
-
-    std::string token;
-    while (iss >> token) {
-        if (not token.starts_with('@')) {
-            throw nova::exception("Invalid batch scenario step token `{}` in `{}` (expected `@key=value`)", token, step);
-        }
-
-        auto body = token.substr(1);
-        auto eq_pos = body.find('=');
-        if (eq_pos == std::string::npos) {
-            throw nova::exception("Invalid batch scenario step token `{}` in `{}` (expected `@key=value`)", token, step);
-        }
-
-        auto key = body.substr(0, eq_pos);
-        std::ranges::replace(key, '-', '_');
-        result.overrides.insert_or_assign(std::move(key), body.substr(eq_pos + 1));
-    }
-
-    return result;
+auto share_dir(const std::filesystem::path& binary) -> std::filesystem::path {
+    return binary.parent_path().parent_path() / "share" / "baldr";
 }
 
-[[nodiscard]] auto parse(const nova::yaml& doc, config result) -> config {
-    if (doc.contains("debugger")) {
-        result.debugger = doc.lookup<std::string>("debugger");
-    }
-
-    if (doc.contains("debugger-args")) {
-        result.debugger_args = doc.lookup<std::vector<std::string>>("debugger-args");
-    }
-
-    if (doc.contains("build-type")) {
-        result.build_type = doc.lookup<std::string>("build-type");
-    }
-
-    if (doc.contains("cmake.definitions")) {
-        auto defines = doc.lookup<std::map<std::string, std::string>>("cmake.definitions");
-        for (auto& [key, value] : defines) {
-            result.cmake_defines.insert_or_assign(key, std::move(value));
-        }
-    }
-
-    if (doc.contains("env")) {
-        auto env = doc.lookup<std::map<std::string, std::string>>("env");
-        for (auto& [key, value] : env) {
-            result.env.insert_or_assign(key, std::move(value));
-        }
-    }
-
-    if (doc.contains("docker.mount-baldr")) {
-        result.docker_mount_baldr = doc.lookup<bool>("docker.mount-baldr");
-    }
-
-    if (doc.contains("docker.baldr-path")) {
-        result.docker_baldr_path = doc.lookup<std::string>("docker.baldr-path");
-    }
-
-    result.batch.env = parse_batch_env(doc);
-    result.batch.stages = parse_batch_stages(doc);
-    result.batch.scenarios = parse_batch_scenarios(doc);
-
-    return result;
-}
-
-auto load(std::string_view yaml_content, config result) -> nova::expected<config, nova::error> {
-    try {
-        auto doc = nova::yaml{ std::string(yaml_content) };
-        return parse(doc, std::move(result));
-    } catch (const std::exception& ex) {
-        return nova::unexpected{ nova::error(ex.what()) };
-    }
-}
-
-auto load(const std::filesystem::path& path, baldr::config result) -> nova::expected<baldr::config, nova::error> {
-    nova::log::debug("Trying to load config `{}`", path.string());
-    if (not std::filesystem::exists(path)) {
-        return result;
-    }
-
-    nova::log::debug("Config `{}` loaded", path.string());
+auto parse(const nova::dyn_value& doc) -> config {
+    auto ret = config{ };
 
     try {
-        auto doc = nova::yaml{ path };
-        return parse(doc, std::move(result));
-    } catch (const std::exception& ex) {
-        return nova::unexpected{ nova::error(ex.what()) };
+        ret.debugger = doc.lookup("debugger", ret.debugger);
+        ret.debugger_args = doc.lookup("debugger-args", ret.debugger_args);
+        ret.build_type = doc.lookup("build-type", ret.build_type);
+        ret.cmake_defines = text_map(doc, "cmake.definitions");
+        ret.env = text_map(doc, "env");
+        ret.docker_mount_baldr = doc.lookup("docker.mount-baldr", ret.docker_mount_baldr);
+        ret.docker_baldr_path = doc.find<std::string>("docker.baldr-path");
+        ret.classifier_rules = parse_rules(doc);
+    } catch (const nova::exception& ex) {
+        throw nova::exception("Config {}", ex.what());
     }
+
+    return ret;
 }
 
-auto load(const std::filesystem::path& project_dir) -> nova::expected<config, nova::error> {
+auto find_config(const std::filesystem::path& dir, std::string_view stem) -> std::optional<std::filesystem::path> {
+    static constexpr auto extensions = std::to_array<std::string_view>({ ".yaml", ".yml", ".json", ".toml" });
+
+    auto found = std::vector<std::filesystem::path>{ };
+    for (const auto extension : extensions) {
+        auto path = dir / fmt::format("{}{}", stem, extension);
+        auto ec = std::error_code{ };
+
+        const auto present = std::filesystem::exists(path, ec);
+
+        if (ec) {
+            throw nova::exception("Cannot access `{}`: {}", path.string(), ec.message());
+        }
+
+        if (present) {
+            found.push_back(std::move(path));
+        }
+    }
+
+    if (found.size() > 1) {
+        auto names = std::vector<std::string>{ };
+
+        for (const auto& path : found) {
+            names.push_back(path.filename().string());
+        }
+
+        throw nova::exception("Multiple config files in `{}`: {}; keep only one", dir.string(), fmt::join(names, ", "));
+    }
+
+    if (found.empty()) {
+        return std::nullopt;
+    }
+
+    return found.front();
+}
+
+auto read(const std::filesystem::path& dir) -> nova::dyn_value {
+    const auto file = find_config(dir, ".baldr");
+    if (not file) {
+        nova::log::debug("No config in `{}`", dir.string());
+        return nova::dyn_value::map({ });
+    }
+
+    auto doc = nova::dyn_value::read_config(*file);
+    if (not doc) {
+        throw nova::exception("Failed to read config: {}", doc.error());
+    }
+
+    nova::log::debug("Config `{}` loaded", file->string());
+    return std::move(*doc);
+}
+
+auto load(
+        const std::filesystem::path& project_dir,
+        const std::filesystem::path& share_dir
+) -> config
+{
     const auto home = std::filesystem::path{ nova::getenv("HOME").value() };
-    auto config_default = config{ };
-
-    auto global = load(home / ".baldr.yaml", config_default);
-    if (global) {
-        config_default = *global;
-    }
-
-    return load(project_dir / ".baldr.yaml", config_default);
+    auto global = read(home);
+    const auto user = nova::dyn_value::merge(std::move(global), read(project_dir));
+    return parse(nova::dyn_value::merge(read_shipped(share_dir), user));
 }
 
 } // namespace baldr

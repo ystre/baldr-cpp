@@ -1,11 +1,14 @@
 /**
  * Part of Utility Library
  *
- * Process spawning.
+ * @brief   Process spawning.
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Junie)
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-09-19
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #pragma once

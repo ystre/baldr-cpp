@@ -1,13 +1,17 @@
 /**
  * Part of Utility Library
  *
- * RAII signal-handler installer (`signal_guard`) and a reusable
- * count-then-escalate handler policy (`signal_handler`) that can be
- * installed through it.
+ * @brief   RAII signal helpers.
+ *
+ * RAII signal-handler installer (`signal_guard`) and a reusable handler policy
+ * (`signal_handler`) installed through it.
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Claude)
- * @date        2026-08-06
+ * @created     2026-08-06
+ * @updated     2026-09-19
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #pragma once

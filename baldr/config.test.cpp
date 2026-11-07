@@ -1,8 +1,22 @@
+/**
+ * Part of Baldr
+ *
+ * @brief   Tests of `config.hpp`.
+ *
+ * @author      Gábor Krisztián Girhiny
+ * @created     2026-09-19
+ * @updated     2026-10-31
+ * @reviewed    skimmed
+ * SPDX-License-Identifier: BSL-1.0
+ */
+
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <baldr/config.hpp>
 
 #include <libnova/error.hpp>
+#include <libnova/dyn_value.hpp>
 
 #include <string_view>
 #include <tuple>
@@ -12,8 +26,8 @@ using namespace std::string_view_literals;
 namespace {
 
 constexpr auto global_config = R"yaml(
-debugger: gdb
-debugger-args:
+debugger: lldb
+debugger-args: [--batch]
 build-type: Release
 
 env:
@@ -24,6 +38,9 @@ cmake:
   definitions:
     GLOBAL_DEFINE: global
     CUSTOM_DEFINE: something
+
+docker:
+  mount-baldr: false
 )yaml"sv;
 
 constexpr auto local_config = R"yaml(
@@ -38,15 +55,18 @@ cmake:
     LOCAL_DEFINE: local
 )yaml"sv;
 
-TEST(config, Negative_MalformedYamlIsError) {
-    const auto res = baldr::load("debugger: [invalid\n"sv, baldr::config{});
-    ASSERT_FALSE(res.has_value());
-    EXPECT_FALSE(res.error().message.empty());
+[[nodiscard]] auto yaml(std::string_view text) -> nova::dyn_value {
+    return nova::dyn_value::parse(text, nova::dyn_value::format_e::yaml).value();
 }
 
-TEST(config, MissingFileReturnsDefaults) {
-    const baldr::config res;
+[[nodiscard]] auto merged(std::string_view base, std::string_view overlay) -> baldr::config {
+    return baldr::parse(nova::dyn_value::merge(yaml(base), yaml(overlay)));
+}
+
+TEST(config, Defaults) {
+    const auto res = baldr::parse(nova::dyn_value::map({ }));
     EXPECT_EQ(res.debugger, "gdb");
+    EXPECT_EQ(res.debugger_args, (std::vector<std::string>{ "--args" }));
     EXPECT_EQ(res.build_type, "Debug");
     EXPECT_TRUE(res.cmake_defines.empty());
     EXPECT_TRUE(res.env.empty());
@@ -54,105 +74,81 @@ TEST(config, MissingFileReturnsDefaults) {
     EXPECT_FALSE(res.docker_baldr_path.has_value());
 }
 
-TEST(config, ProjectLocalFileIsLoaded) {
-    const auto res = baldr::load(local_config, baldr::config{});
-    ASSERT_TRUE(res.has_value());
-    EXPECT_EQ(res->debugger, "gdb");
-    EXPECT_EQ(res->build_type, "Debug");
-    EXPECT_EQ(res->cmake_defines.at("CUSTOM_DEFINE"), "something else");
-    EXPECT_EQ(res->cmake_defines.at("LOCAL_DEFINE"), "local");
-    EXPECT_EQ(res->env.at("CUSTOM_ENV"), "something else");
-    EXPECT_EQ(res->env.at("LOCAL_ENV"), "local");
-}
-
-TEST(config, BuildTypeOverride) {
-    const auto res = baldr::load("build-type: Release\n"sv, baldr::config{});
-    ASSERT_TRUE(res.has_value());
-    EXPECT_EQ(res->build_type, "Release");
+TEST(config, ProjectLocalFileIsParsed) {
+    const auto res = baldr::parse(yaml(local_config));
+    EXPECT_EQ(res.debugger, "gdb");
+    EXPECT_EQ(res.build_type, "Debug");
+    EXPECT_EQ(res.cmake_defines.at("CUSTOM_DEFINE"), "something else");
+    EXPECT_EQ(res.cmake_defines.at("LOCAL_DEFINE"), "local");
+    EXPECT_EQ(res.env.at("CUSTOM_ENV"), "something else");
+    EXPECT_EQ(res.env.at("LOCAL_ENV"), "local");
 }
 
 TEST(config, ConfigMerging) {
-    const auto global = baldr::load(global_config, baldr::config{});
-    ASSERT_TRUE(global.has_value());
-
-    const auto res = baldr::load(local_config, *global);
-    ASSERT_TRUE(res.has_value());
-    EXPECT_EQ(res->debugger, "gdb");
-    EXPECT_EQ(res->build_type, "Release");
-    EXPECT_EQ(res->cmake_defines.at("GLOBAL_DEFINE"), "global");
-    EXPECT_EQ(res->cmake_defines.at("CUSTOM_DEFINE"), "something else");
-    EXPECT_EQ(res->cmake_defines.at("LOCAL_DEFINE"), "local");
-    EXPECT_EQ(res->env.at("GLOBAL_ENV"), "global");
-    EXPECT_EQ(res->env.at("CUSTOM_ENV"), "something else");
-    EXPECT_EQ(res->env.at("LOCAL_ENV"), "local");
+    const auto res = merged(global_config, local_config);
+    EXPECT_EQ(res.debugger, "lldb");
+    EXPECT_EQ(res.debugger_args, (std::vector<std::string>{ "--batch" }));
+    EXPECT_EQ(res.build_type, "Release");
+    EXPECT_FALSE(res.docker_mount_baldr);
+    EXPECT_EQ(res.cmake_defines.at("GLOBAL_DEFINE"), "global");
+    EXPECT_EQ(res.cmake_defines.at("CUSTOM_DEFINE"), "something else");
+    EXPECT_EQ(res.cmake_defines.at("LOCAL_DEFINE"), "local");
+    EXPECT_EQ(res.env.at("GLOBAL_ENV"), "global");
+    EXPECT_EQ(res.env.at("CUSTOM_ENV"), "something else");
+    EXPECT_EQ(res.env.at("LOCAL_ENV"), "local");
 }
 
-constexpr auto batch_config = R"yaml(
-batch:
-  env:
-    ARTIFACT_DIR: .tmp
-    REPORT_DIR: ${ARTIFACT_DIR}/reports
-
-  stages:
-    clean:
-      cmd: "./scripts/clean.sh"
-    install:
-      parameters:
-        - build_type
-      cmd: "baldr build -t baldr $build_type -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR"
-
-  scenarios:
-    dev:
-      - clean
-      - install @build-type=Debug
-)yaml"sv;
-
-TEST(config, BatchEnvInterpolation) {
-    const auto res = baldr::load(batch_config, baldr::config{});
-    ASSERT_TRUE(res.has_value());
-    EXPECT_EQ(res->batch.env.at("ARTIFACT_DIR"), ".tmp");
-    EXPECT_EQ(res->batch.env.at("REPORT_DIR"), ".tmp/reports");
+TEST(config, ListsAreReplaced) {
+    const auto res = merged(global_config, "debugger-args: [-q, --args]\n");
+    EXPECT_EQ(res.debugger_args, (std::vector<std::string>{ "-q", "--args" }));
 }
 
-TEST(config, BatchStagesParsed) {
-    const auto res = baldr::load(batch_config, baldr::config{});
-    ASSERT_TRUE(res.has_value());
-    ASSERT_TRUE(res->batch.stages.contains("clean"));
-    EXPECT_EQ(res->batch.stages.at("clean").cmd, "./scripts/clean.sh");
-    EXPECT_TRUE(res->batch.stages.at("clean").parameters.empty());
-
-    ASSERT_TRUE(res->batch.stages.contains("install"));
-    EXPECT_EQ(res->batch.stages.at("install").parameters, (std::vector<std::string>{ "build_type" }));
+TEST(config, NullResetsToDefault) {
+    const auto res = merged(global_config, "build-type:\n");
+    EXPECT_EQ(res.build_type, "Debug");
 }
 
-TEST(config, BatchScenariosParsed) {
-    const auto res = baldr::load(batch_config, baldr::config{});
-    ASSERT_TRUE(res.has_value());
-    ASSERT_TRUE(res->batch.scenarios.contains("dev"));
-
-    const auto& steps = res->batch.scenarios.at("dev");
-    ASSERT_EQ(steps.size(), 2);
-    EXPECT_EQ(steps[0].stage, "clean");
-    EXPECT_TRUE(steps[0].overrides.empty());
-    EXPECT_EQ(steps[1].stage, "install");
-    EXPECT_EQ(steps[1].overrides.at("build_type"), "Debug");
+TEST(config, NullDeletesInheritedKey) {
+    const auto res = merged(global_config, "env:\n  GLOBAL_ENV:\n");
+    EXPECT_FALSE(res.env.contains("GLOBAL_ENV"));
+    EXPECT_EQ(res.env.at("CUSTOM_ENV"), "something");
 }
 
-TEST(config, ParseStepNormalizesHyphenToUnderscore) {
-    const auto step = baldr::parse_step("install @build-type=Release");
-    EXPECT_EQ(step.stage, "install");
-    EXPECT_EQ(step.overrides.at("build_type"), "Release");
+TEST(config, DockerBaldrPathIsOptional) {
+    EXPECT_FALSE(baldr::parse(yaml("docker:\n  mount-baldr: true\n")).docker_baldr_path.has_value());
+    EXPECT_EQ(baldr::parse(yaml("docker:\n  baldr-path: /opt/baldr\n")).docker_baldr_path, "/opt/baldr");
 }
 
-TEST(config, ParseStepNoOverrides) {
-    const auto step = baldr::parse_step("clean");
-    EXPECT_EQ(step.stage, "clean");
-    EXPECT_TRUE(step.overrides.empty());
+TEST(config, ScalarsReadAsStrings) {
+    const auto res = baldr::parse(yaml(R"yaml(
+cmake:
+  definitions:
+    CMAKE_CXX_STANDARD: 23
+    BUILD_TESTING: ON
+    ENABLE_X: true
+)yaml"));
+    EXPECT_EQ(res.cmake_defines.at("CMAKE_CXX_STANDARD"), "23");
+    EXPECT_EQ(res.cmake_defines.at("BUILD_TESTING"), "ON");
+    EXPECT_EQ(res.cmake_defines.at("ENABLE_X"), "true");
 }
 
-TEST(config, ParseStepInvalidTokenThrows) {
-    EXPECT_THROW(std::ignore = baldr::parse_step("install build-type=Release"), nova::exception);
-    EXPECT_THROW(std::ignore = baldr::parse_step("install @build-type"), nova::exception);
+TEST(config, Negative_ErrorNamesTheKey) {
+    EXPECT_THAT(
+        [] { std::ignore = baldr::parse(yaml("env:\n  NESTED:\n    key: value\n")); },
+        testing::ThrowsMessage<nova::exception>(testing::HasSubstr("Config `env.NESTED`: expected a scalar, got map"))
+    );
+
+    EXPECT_THAT(
+        [] { std::ignore = baldr::parse(yaml("debugger-args: --args\n")); },
+        testing::ThrowsMessage<nova::exception>(testing::HasSubstr("Config `debugger-args`: expected seq of string, got string"))
+    );
+}
+
+TEST(config, Negative_WrongTypeIsError) {
+    EXPECT_THROW(std::ignore = baldr::parse(yaml("env: [a, b]\n")), nova::exception);
+    EXPECT_THROW(std::ignore = baldr::parse(yaml("debugger-args: --args\n")), nova::exception);
+    EXPECT_THROW(std::ignore = baldr::parse(yaml("docker:\n  mount-baldr: yes\n")), nova::exception);
+    EXPECT_THROW(std::ignore = baldr::parse(yaml("env:\n  NESTED:\n    key: value\n")), nova::exception);
 }
 
 } // namespace

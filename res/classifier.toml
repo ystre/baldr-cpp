@@ -1,0 +1,62 @@
+# Classifier rules of Baldr: the log level of each line of subprocess output.
+#
+# `use` lists the sets in effect, in order. The rules of a set are in order too,
+# and the first one with a marker in the line decides its level; a line without
+# a match is `info`. A marker is a plain substring, and ANSI escapes in the line
+# are ignored.
+#
+# A `classifier` section in `.baldr.<ext>` goes on top of this file: its `use`
+# replaces the one here, its sets add to or replace the ones here.
+
+use = ["make", "ninja", "gtest", "ctest", "sanitizers", "linker", "gcc", "cmake"]
+
+[[sets.make]]
+level = "info"
+contains = ["Waiting for unfinished jobs"]
+
+[[sets.make]]
+level = "error"
+contains = [": *** "]               # make: *** [target] Error 1, make[2]: *** ...
+
+[[sets.ninja]]
+level = "error"
+contains = ["FAILED:", "ninja: build stopped"]
+
+[[sets.gtest]]
+level = "error"
+contains = ["[  FAILED  ]"]
+
+[[sets.ctest]]
+level = "error"
+contains = ["tests failed out of", "***Failed"]
+
+[[sets.sanitizers]]
+level = "error"
+contains = [
+    "AddressSanitizer",
+    "runtime error:",               # UBSan
+]
+
+[[sets.linker]]
+level = "error"
+contains = [
+    "error: linker command failed", # clang
+    "undefined reference to",
+    "multiple definition of",
+]
+
+[[sets.gcc]]                        # clang too
+level = "error"
+contains = [": error:", ": fatal error:"]
+
+[[sets.gcc]]
+level = "warning"
+contains = [": warning:"]
+
+[[sets.cmake]]
+level = "error"
+contains = ["CMake Error"]
+
+[[sets.cmake]]
+level = "warning"
+contains = ["CMake Warning", "CMake Deprecation Warning"]

@@ -1,13 +1,17 @@
 /**
  * Part of Utility Library
  *
- * Example application demonstrating `utl::log`'s scrolling-window
- * rendering: a fixed-size rolling window of the most recent log lines,
- * collapsed into a final success/failure message once the tracked work
- * completes.
+ * @brief   Example application demonstrating `utl::log`'s scrolling-window
+ *          rendering.
+ *
+ * A fixed-size rolling window of the most recent log lines, collapsed into a
+ * final success/failure message once the tracked work completes.
  *
  * @author      Gábor Krisztián Girhiny
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-10-28
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <libutl/log.hpp>

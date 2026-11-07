@@ -1,15 +1,20 @@
 /**
- * Part of Baldr.
+ * Part of Baldr
  *
- * Baldr CLI entry point.
+ * @brief   Baldr CLI entry point.
  *
  * @author      Gábor Krisztián Girhiny
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-11-07
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <baldr/builder.hpp>
 #include <baldr/config.hpp>
 #include <baldr/docker.hpp>
+#include <baldr/gen/build_info.hpp>
 
 #include <libutl/log.hpp>
 #include <libutl/signal.hpp>
@@ -42,37 +47,13 @@ namespace po = boost::program_options;
 
 namespace {
 
-#ifndef BALDR_VERSION
-#define BALDR_VERSION "unknown"
-#endif
-
-#ifndef BALDR_GIT_HASH
-#define BALDR_GIT_HASH "unknown"
-#endif
-
-#ifndef BALDR_GIT_BRANCH
-#define BALDR_GIT_BRANCH "unknown"
-#endif
-
-#ifndef BALDR_GIT_DIRTY
-#define BALDR_GIT_DIRTY "unknown"
-#endif
-
 [[nodiscard]] auto baldr_version() {
-    const std::string dirty_suffix = std::string{BALDR_GIT_DIRTY} == "dirty" ? ".dirty" : "";
 #ifdef BALDR_STATIC_LINK
     constexpr std::string_view linkage = "static";
 #else
     constexpr std::string_view linkage = "dynamic";
 #endif
-    return fmt::format(
-        "baldr v{}+{}.{}{} ({})",
-        BALDR_VERSION,
-        BALDR_GIT_HASH,
-        BALDR_GIT_BRANCH,
-        dirty_suffix,
-        linkage
-    );
+    return fmt::format("baldr v{} ({})", baldr::full_version(), linkage);
 }
 
 /**
@@ -357,8 +338,11 @@ void resolve_command(options& opts, const std::string& cmd) {
  * @brief   Run Baldr in a container.
  *
  * The resolved project directory is mounted to `/workspace`, baldr's own binary
- * is mounted in unless disabled via `cfg.docker_mount_baldr`, and the container
- * process runs as the host's uid:gid.
+ * and shipped files are mounted in unless disabled via `cfg.docker_mount_baldr`,
+ * and the container process runs as the host's uid:gid.
+ *
+ * `share` directory is conditionally mounted as Docker would create a missing
+ * host directory, as root.
  */
 [[nodiscard]] auto run_in_container(const options& opts, const baldr::config& cfg) -> int {
     std::vector<baldr::bind_mount> mounts;
@@ -381,6 +365,14 @@ void resolve_command(options& opts, const std::string& cmd) {
             .container = baldr_path,
             .read_only = true
         });
+
+        if (const auto host_share = baldr::share_dir(host_path); std::filesystem::exists(host_share)) {
+            mounts.push_back({
+                .host = host_share.string(),
+                .container = baldr::share_dir(baldr_path).string(),
+                .read_only = true
+            });
+        }
     }
 
     const auto user = fmt::format("{}:{}", getuid(), getgid());
@@ -391,9 +383,9 @@ void resolve_command(options& opts, const std::string& cmd) {
         argv,
         baldr::container_config {
             .mounts = mounts,
-            .user = user,
-            .env = {}
-        }
+            .user = user
+        },
+        cfg.classifier_rules
     );
 }
 
@@ -403,12 +395,8 @@ void resolve_command(options& opts, const std::string& cmd) {
  * @throws  if the config file fails to load.
  */
 [[nodiscard]] auto load_merged_config(const options& opts) -> baldr::config {
-    auto cfg = baldr::load(opts.project_dir);
-    if (not cfg) {
-        throw nova::exception("Failed to load .baldr.yaml: {}", cfg.error().message);
-    }
+    auto merged_cfg = baldr::load(opts.project_dir, baldr::share_dir(self_exe_path()));
 
-    auto merged_cfg = *cfg;
     if (opts.build_type_explicit) {
         merged_cfg.build_type = opts.build_type;
     }

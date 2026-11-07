@@ -5,8 +5,10 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-10-31
- * @status      Prototype
+ * @updated     2026-11-06
+ * @status      evolving
+ * @reviewed    read
+ * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <libutl/log.hpp>
@@ -252,17 +254,19 @@ void digest_sink::sink_it_(const spdlog::details::log_msg& msg) {
         }
     }
 
-    line = tty::cap_visible_width(line, m_line_max);
+    line = tty::cap_visible_width(line, m_line_width);
 
     if (not m_seen.insert(line).second) {
         ++m_stats.repeats;
         return;
     }
 
-    if (msg.level >= spdlog::level::err) {
-        ++m_stats.errors;
-    } else {
-        ++m_stats.warnings;
+    auto& level_count = msg.level >= spdlog::level::err ? m_stats.errors : m_stats.warnings;
+    ++level_count;
+
+    if (level_count > m_level_max) {
+        ++m_stats.hidden;
+        return;
     }
 
     fmt::println(stderr, "{}", line);
@@ -285,6 +289,10 @@ void digest_sink::summary(const std::string& msg) {
 
     if (m_stats.repeats > 0) {
         parts.push_back(fmt::format("{} repeated", m_stats.repeats));
+    }
+
+    if (m_stats.hidden > 0) {
+        parts.push_back(fmt::format("{} not shown", m_stats.hidden));
     }
 
     if (auto file = file_path()) {
@@ -322,7 +330,8 @@ auto resolve(const std::string& name, const env_lookup& getenv) -> settings_t {
     apply_env(getenv, log_env_name(name, "VIEW"), parse_view, [&](view_e view) { config.terminal_view = view; });
     apply_env(getenv, log_env_name(name, "FILE_FORMAT"), parse_format, [&](format_e format) { config.file_format = format; });
     apply_env(getenv, log_env_name(name, "WINDOW_SIZE"), parse_positive, [&](std::size_t lines) { config.window_size = lines; });
-    apply_env(getenv, log_env_name(name, "LINE_MAX"), parse_positive, [&](std::size_t length) { config.line_max = length; });
+    apply_env(getenv, log_env_name(name, "LINE_WIDTH"), parse_positive, [&](std::size_t length) { config.line_width = length; });
+    apply_env(getenv, log_env_name(name, "DIGEST_LINES"), parse_positive, [&](std::size_t lines) { config.digest_lines = lines; });
 
     if (auto dir = getenv(log_env_name(name, "FILE")); dir.has_value()) {
         config.file_dir = dir->empty()
@@ -358,7 +367,7 @@ void init(const std::string& name, const settings_t& config) {
             }
             break;
         case view_e::digest:
-            logger = spdlog::create<digest_sink>(name, config.line_max);
+            logger = spdlog::create<digest_sink>(name, config.line_width, config.digest_lines);
             break;
     }
 

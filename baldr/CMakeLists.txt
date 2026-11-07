@@ -2,15 +2,13 @@ file(GLOB_RECURSE BALDR_HEADER_FILES "*.hpp")
 
 add_library(builder
     builder.cpp
-    classify.cpp
+    classifier.cpp
     docker.cpp
     config.cpp
     exec.cpp
 )
 
-target_link_libraries(builder PUBLIC utils Boost::headers)
-code_analysis(builder PRIVATE)
-add_test_target(builder)
+target_link_libraries(builder PUBLIC utils Boost::headers nlohmann_json::nlohmann_json)
 
 target_sources(builder PUBLIC
     FILE_SET HEADERS
@@ -34,15 +32,6 @@ if(BALDR_STATIC_LINK)
     target_compile_definitions(baldr PRIVATE BALDR_STATIC_LINK)
 endif()
 
-project_git_hash(BALDR_GIT_HASH)
-project_git_branch(BALDR_GIT_BRANCH)
-project_git_dirty(BALDR_GIT_DIRTY)
-
-target_compile_definitions(baldr PRIVATE
-    BALDR_VERSION="${BALDR_VERSION}"
-    BALDR_GIT_HASH="${BALDR_GIT_HASH}"
-    BALDR_GIT_BRANCH="${BALDR_GIT_BRANCH}"
-    BALDR_GIT_DIRTY="${BALDR_GIT_DIRTY}"
-)
+nova_target_build_info(baldr NAMESPACE baldr)
 
 install(TARGETS baldr COMPONENT baldr)

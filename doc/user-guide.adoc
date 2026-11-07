@@ -18,9 +18,40 @@ the project for LSP servers.
 
 == Configuration file
 
-A project-local `.baldr.yaml` (falling back to `~/.baldr.yaml`) can supply
-defaults for `build_type`, `cmake.definitions` and `cmake.env`. CLI flags
-always take precedence over values from either config file.
+The global (in HOME) and project-local configuration files are merged. They are
+called `.baldr.<ext>` and the extension can be YAML, JSON or TOML. the two need
+not be in the same format, and more than one in the same directory is an error.
+
+The merging behaviour:
+
+* maps (`env`, `cmake.definitions`) merge key by key
+* anything else (a list such as `debugger-args` too) replaces the global value
+* empty or null value deletes the key, for example,  `build-type:` resets it to
+  Baldr's default and an empty entry under `env` or `cmake.definitions` drops
+  the one inherited from the global file. Applicable to YAML and JSON only.
+
+CLI flags always take precedence over both files.
+
+A missing or empty file (or one with only comments) is the same as no
+settings; anything else must be a map.
+
+[source,yaml]
+----
+debugger: gdb
+debugger-args: [--args]
+build-type: Debug
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 8
+cmake:
+  definitions:
+    CMAKE_CXX_STANDARD: 23
+docker:
+  mount-baldr: true
+  baldr-path: /path/to/baldr
+----
+
+The values under `env` and `cmake.definitions` take any scalar as its text, but
+a number keeps only its numeric value, so quote a version such as `"1.10"`.
 
 == Logging
 
@@ -57,9 +88,14 @@ variable.
 | Lines shown by `window`
 | 10
 
-| `BALDR_LOG_LINE_MAX`
+| `BALDR_LOG_LINE_WIDTH`
 | Length cap of a `digest` line
 | 160
+
+| `BALDR_LOG_DIGEST_LINES`
+| Lines shown by `digest`, for each of errors and warnings; the summary counts
+  the rest as `not shown`
+| 20
 |===
 
 Each run writes the full record to
@@ -74,14 +110,59 @@ make[2]: *** [src/CMakeFiles/hello.dir/build.make:107: src/CMakeFiles/hello.dir/
 Build failed (exit code 2). 2 errors, 1 warning, 2 repeated, full log: /tmp/baldr-logs/20261028T153609.675Z_proj_build.log
 ----
 
-Lines of the build tools get their level from their content: compiler,
-linker, CMake, make, ninja, sanitizer and test failures are errors, compiler
-and CMake warnings are warnings, the rest is info.
+Lines of the build tools get their level from their content, see
+<<classifier>>.
 
 A nested `baldr` streams plain lines for the outer one to re-log and writes
 no log file of its own. This is what `-i/--image` relies on, as the container
 runs Baldr again; it applies the same way to a `baldr` called from a build
 step.
+
+[[classifier]]
+=== Classifying output
+
+Baldr has the capability of classifying the log levels coming from its
+subprocess. Primary use-case is for `digest` logging mode avoiding littering
+the output.
+
+The rules that give each line of subprocess output its level come from
+`share/baldr/classifier.toml`, installed next to the `bin` directory of Baldr. It
+can be replaced by a `classifier.<ext>` in any of the configuration formats, and
+more than one in the directory is an error.
+
+It has one named set of rules per tool: `make`, `ninja`, `gtest`, `ctest`,
+`sanitizers`, `linker`, `gcc` (for Clang too) and `cmake`. Baldr itself knows
+none of these tools.
+
+The names let a project change one tool without touching the others: leaving a
+set out of `use` turns that tool's rules off, and a set of the same name
+replaces them.
+
+* `use` lists the sets in effect, in matching order.
+* A rule has a `level` (`trace`, `debug`, `info`, `warning`, `error`, `critical`)
+  and the markers it `contains`, plain substrings of the line.
+* The first matching rule decides, and a line nothing matches is `info`. ANSI
+  escapes in the line during classification are ignored.
+
+A `classifier` section in the configuration file goes on top of the shipped file
+with the same merging behaviour: `use` replaces the shipped list, and a set
+replaces the shipped set of that name or adds a new one. A set takes effect only
+if `use` names it, so to extend the shipped sets, repeat them there:
+
+[source,toml]
+----
+[classifier]
+use = ["mytool", "make", "ninja", "gtest", "ctest", "sanitizers", "linker", "gcc", "cmake"]
+
+[[classifier.sets.mytool]]
+level = "error"
+contains = ["MYTOOL FAILED"]
+----
+
+Without the shipped file, as with a `baldr` binary copied alone, Baldr warns and
+logs every line as `info`, unless the configuration file has rules of its own.
+In `digest` view that leaves only the warning and the summary, with the output
+in the log file.
 
 == Using a container
 
@@ -96,6 +177,8 @@ the host:
   own copy. Set `docker.mount-baldr: false` in `.baldr.yaml` if the image
   already provides one; `docker.baldr-path` overrides the host path that gets
   mounted (default: the running `baldr` binary itself, via `/proc/self/exe`).
+  The `share/baldr` directory beside that binary is mounted along with it, to
+  `/usr/local/share/baldr`.
 * The container process runs as the host's `uid:gid`, so files written into
   the mounted project directory (build output, generated files) end up
   owned by the same user as on the host.

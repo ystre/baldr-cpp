@@ -1,11 +1,14 @@
 /**
  * Part of Utility Library
  *
- * Scrollog — a scrolling, rolling-window log/progress renderer.
+ * @brief   A line reader, parser.
  *
  * @author      Gábor Krisztián Girhiny
- * @coauthor    Claude Sonnet 5 (Junie)
- * @date        2026-07-12
+ * @created     2026-07-12
+ * @updated     2026-09-19
+ * @status      evolving
+ * @reviewed    skimmed
+ * SPDX-License-Identifier: BSL-1.0
  */
 #pragma once
 
