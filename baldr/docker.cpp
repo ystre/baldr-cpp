@@ -5,7 +5,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-07
  * @status      experimental
  * @reviewed    none
  * SPDX-License-Identifier: BSL-1.0
@@ -42,10 +42,14 @@ constexpr auto default_api_version = "v1.43";
  *          Docker's 8-byte frame headers, starting at `offset`.
  */
 std::uint32_t frame_payload_size(std::string_view buf, std::size_t offset) {
-    return (static_cast<std::uint8_t>(buf[offset + 4]) << 24) |
-           (static_cast<std::uint8_t>(buf[offset + 5]) << 16) |
-           (static_cast<std::uint8_t>(buf[offset + 6]) << 8) |
-            static_cast<std::uint8_t>(buf[offset + 7]);
+    const auto byte_at = [&](std::size_t index) -> std::uint32_t {
+        return static_cast<std::uint8_t>(buf[offset + index]);
+    };
+
+    return (byte_at(4) << 24)
+         | (byte_at(5) << 16)
+         | (byte_at(6) << 8)
+         | byte_at(7);
 }
 
 } // namespace

@@ -7,7 +7,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-07
  * @status      experimental
  * @reviewed    none
  * SPDX-License-Identifier: BSL-1.0
@@ -42,7 +42,7 @@ struct bind_mount {
 struct container_config {
     std::vector<bind_mount> mounts;
     std::optional<std::string> user;
-    std::map<std::string, std::string> env;
+    std::map<std::string, std::string> env{};
     bool auto_remove = true;
     bool force_pull = false;
 };

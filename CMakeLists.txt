@@ -5,6 +5,7 @@ if(CMAKE_BINARY_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" BALDR_VERSION)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS VERSION)
 project("baldr" VERSION ${BALDR_VERSION} LANGUAGES CXX)
 message(STATUS "Baldr version ${BALDR_VERSION}")
 
@@ -16,6 +17,11 @@ include(novaCompilerSettings)
 include(novaBuildInfo)
 
 include(settings.cmake)
+
+# Automatically link code analysis to all targets.
+add_library(code-analysis INTERFACE)
+code_analysis(code-analysis INTERFACE)
+link_libraries(code-analysis)
 
 include(cmake/test.cmake)
 
