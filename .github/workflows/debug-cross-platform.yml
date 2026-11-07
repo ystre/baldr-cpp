@@ -1,0 +1,57 @@
+name: Debug cross-platform
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+env:
+  WORKSPACE: ${{github.workspace}}
+
+jobs:
+  debug-cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-24.04-arm, macos-26-intel, macos-26 ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - uses: turtlebrowser/get-conan@v1.2
+      with:
+        version: "2.32.0"
+
+    - name: Install build tools (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential cmake
+
+    - name: Install build tools (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake
+
+    - name: Build
+      run: |
+        conan export "${{env.WORKSPACE}}/deps/nova-cpp/libnova"
+        cmake -S "${{env.WORKSPACE}}" \
+          -B "${{env.WORKSPACE}}/build/debug" \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DSANITIZERS=asan \
+          -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="${{env.WORKSPACE}}/env/conan_provider.cmake"
+        cmake --build "${{env.WORKSPACE}}/build/debug"
+
+    - name: Unit Test
+      run: |
+        ${{env.WORKSPACE}}/ci/unit-test.sh
+
+    - name: Smoke Test
+      run: |
+        ${{env.WORKSPACE}}/tests/smoke.sh

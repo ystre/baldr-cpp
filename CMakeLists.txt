@@ -4,12 +4,20 @@ if(CMAKE_BINARY_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     message(FATAL_ERROR "Building in-source is not supported! Create a build dir and remove ${CMAKE_SOURCE_DIR}/CMakeCache.txt")
 endif()
 
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" BALDR_VERSION)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/version.txt" BALDR_VERSION)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS VERSION)
 project("baldr" VERSION ${BALDR_VERSION} LANGUAGES CXX)
 message(STATUS "Baldr version ${BALDR_VERSION}")
 
 include(GNUInstallDirs)
+
+# dependencies.cmake's first find_package() call triggers conan's dependency
+# provider, which (absent a forced -DCONAN_HOST_PROFILE) auto-detects a host
+# profile from the current CMAKE_CXX_STANDARD. Give it the real value early;
+# settings.cmake (included below, after novaCompilerSettings) still sets the
+# authoritative value used for the actual build.
+set(CMAKE_CXX_STANDARD 23)
+
 include(dependencies.cmake)
 
 include(novaCompilerWarnings)

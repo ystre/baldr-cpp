@@ -11,7 +11,9 @@ echo "Building baldr statically into build/static..."
 "$BALDR" -p "${PROJECT_DIR}" build -t baldr \
     --build-type Release \
     --build-dir build/static \
-    -D BALDR_STATIC_LINK=ON
+    -D BALDR_STATIC_LINK=ON \
+    -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES="${PROJECT_DIR}/env/conan_provider.cmake" \
+    -DCONAN_HOST_PROFILE="${PROJECT_DIR}/env/conan-profile"
 
 echo "Verifying ${STATIC_BIN} has no dynamic dependencies..."
 if ldd "${STATIC_BIN}" >/dev/null 2>&1; then

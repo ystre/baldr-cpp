@@ -9,7 +9,6 @@ add_library(builder
 )
 
 target_link_libraries(builder PUBLIC utils Boost::headers nlohmann_json::nlohmann_json)
-add_test_target(builder)
 
 target_sources(builder PUBLIC
     FILE_SET HEADERS
@@ -24,6 +23,7 @@ target_include_directories(builder PUBLIC
 
 add_executable(baldr main.cpp)
 target_link_libraries(baldr PRIVATE builder Boost::program_options)
+code_analysis(baldr PRIVATE)
 
 option(BALDR_STATIC_LINK "Fully statically link the baldr executable" OFF)
 
