@@ -5,7 +5,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    read
  * SPDX-License-Identifier: BSL-1.0
@@ -342,13 +342,17 @@ auto resolve(const std::string& name, const env_lookup& getenv) -> settings_t {
     return config;
 }
 
-void init(const std::string& name) {
-    init(name, resolve(name, [](const std::string& var) -> std::optional<std::string> {
+auto resolve(const std::string& name) -> settings_t {
+    return resolve(name, [](const std::string& var) -> std::optional<std::string> {
         if (auto value = nova::getenv(var); value.has_value()) {
             return *value;
         }
         return std::nullopt;
-    }));
+    });
+}
+
+void init(const std::string& name) {
+    init(name, resolve(name));
 }
 
 void init(const std::string& name, const settings_t& config) {

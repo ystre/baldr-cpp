@@ -73,7 +73,7 @@ namespace {
         ("build-dir", po::value<std::string>(), "Override the default build directory (default: build/<build_type>)")
         ("clean", po::bool_switch()->default_value(false), "For 'build': wipe the build directory before building (clean build)")
         ("cmake-define,D", po::value<std::vector<std::string>>()->composing(), "CMake define KEY=VALUE, repeatable; triggers reconfigure on change")
-        ("target,t", po::value<std::string>(), "Executable name to run (for 'run')")
+        ("target,t", po::value<std::string>(), "Target to build, or executable to run (for 'run')")
         ("build", po::bool_switch()->default_value(false), "For 'run': build the project first")
         ("debug", po::bool_switch()->default_value(false), "For 'run': launch the target under the configured debugger (default: 'gdb --args')")
         ("image,i", po::value<std::string>(), "Docker image to use (required for 'docker'; for 'build'/'run', re-executes inside a container of this image)")
@@ -93,6 +93,7 @@ void print_help(std::ostream& out, const po::options_description& desc) {
     out << "Commands:\n";
     out << "  build      Configure (if needed) and build the project\n";
     out << "  run        Build (if needed) and run a target (-t/--target)\n";
+    out << "  targets    List the buildable targets, one '<name>\\t<type>' line each\n";
     out << "\n";
 }
 
@@ -107,12 +108,14 @@ void print_help(std::ostream& out, const po::options_description& desc) {
 enum class command_type {
     build,
     run,
+    targets,
 };
 
 [[nodiscard]] constexpr auto to_string(command_type command) -> std::string_view {
     switch (command) {
         case command_type::build:   return "build";
         case command_type::run:     return "run";
+        case command_type::targets: return "targets";
     }
 
     std::unreachable();
@@ -190,6 +193,11 @@ void resolve_command(options& opts, const std::string& cmd) {
         if (not opts.target) {
             throw nova::exception("'run' requires -t/--target <name>");
         }
+    } else if (cmd == "targets") {
+        opts.command = command_type::targets;
+        if (opts.image) {
+            throw nova::exception("'targets' does not support -i/--image");
+        }
     } else {
         throw nova::exception("Unknown command: {}", cmd);
     }
@@ -218,7 +226,7 @@ void resolve_command(options& opts, const std::string& cmd) {
     // are positional-only, not real `--command`/`--args` flags.
     po::options_description positional_desc("Positional arguments");
     positional_desc.add_options()
-        ("command", po::value<std::string>(), "Command to run: 'build', 'run'")
+        ("command", po::value<std::string>(), "Command to run: 'build', 'run', 'targets'")
         ("args", po::value<std::vector<std::string>>()->multitoken(), "For 'docker': the container command")
     ;
 
@@ -434,6 +442,43 @@ void resolve_command(options& opts, const std::string& cmd) {
 }
 
 /**
+ * @brief   Print the project's targets, one `<name>\t<type>` line each, for
+ *          people and the shell completion scripts alike.
+ */
+[[nodiscard]] auto list_targets(const options& opts) -> int {
+    auto builder = baldr::builder{ opts.project_dir, load_merged_config(opts), opts.build_dir };
+
+    for (const auto& target : builder.targets()) {
+        fmt::println("{}\t{}", target.name, target.type);
+    }
+
+    return EXIT_SUCCESS;
+}
+
+/**
+ * @brief   Run the command described by `opts`.
+ */
+[[nodiscard]] auto dispatch(const options& opts) -> int {
+    if (opts.command == command_type::targets) {
+        return list_targets(opts);
+    }
+
+    return build_or_run(opts);
+}
+
+/**
+ * @brief   Keep the standard output free for the `targets` listing.
+ *
+ * The log goes to standard error in the stream view, and no log file is
+ * written, as completion runs `targets` on every key press.
+ */
+void init_listing_log() {
+    auto settings = utl::log::resolve("baldr");
+    settings.terminal_view = utl::log::view_e::stream;
+    utl::log::init("baldr", settings);
+}
+
+/**
  * @brief   `<project>_<command>`, naming the run's log file.
  */
 [[nodiscard]] auto log_label(const options& opts) -> std::string {
@@ -481,7 +526,11 @@ auto entrypoint(arg_range auto args) -> int {
         return EXIT_SUCCESS;
     }
 
-    utl::log::open_file(log_label(*options));
+    if (options->command == command_type::targets) {
+        init_listing_log();
+    } else {
+        utl::log::open_file(log_label(*options));
+    }
 
     std::error_code ec;
     if (auto root = std::filesystem::weakly_canonical(options->project_dir, ec); not ec) {
@@ -493,7 +542,7 @@ auto entrypoint(arg_range auto args) -> int {
     int result = EXIT_SUCCESS;
 
     try {
-        result = build_or_run(*options);
+        result = dispatch(*options);
     } catch (const nova::exception& ex) {
         if (not utl::signal_handler::triggered(SIGINT)) {
             utl::log::failure(ex.what());

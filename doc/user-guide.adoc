@@ -3,12 +3,56 @@
 == Running the built target
 
 `baldr run` automatically discovers the built executables. Baldr looks for an
-executable with the same name as the taget.
+executable with the same name as the target.
 
 The discovery mechanism is slightly different depending on the project type.
 
 * CMake projects: recursively looks in the tree under `build/<build_type>`.
 * Make projects: looks directly in `build`. No support for build types.
+
+== Listing targets
+
+`baldr targets` prints the buildable targets of a CMake project, one
+`<name><TAB><type>` line each, sorted by name:
+
+----
+$ baldr targets
+baldr	executable
+builder	static_library
+----
+
+The types are CMake's, in lower case. Interface libraries and the CTest
+dashboard targets (`Nightly*`, `Continuous*`, `Experimental*`) are left out. A
+Makefile project lists nothing.
+
+The listing comes from the CMake File API: Baldr asks for the code model in
+every build directory it configures. `targets` configures the project first if
+`build` would.
+
+The log goes to standard error only, and no log file is written.
+
+== Shell completion
+
+Baldr completes its commands and options in bash and zsh, and the targets of
+`-t/--target` through `baldr targets`: every target for `build`, executables
+only for `run`. The `-p`, `-b` and `--build-dir` already on the command line
+choose the project. Completing a target of a project not configured yet runs
+the configure step, which can take a while.
+
+The scripts ship in `share/baldr/completion`. The installer offers to install
+them, or takes `--completion` or `--no-completion` after `--`:
+
+----
+./baldr-installer -- --completion
+----
+
+It copies them to the standard directories under the installation prefix:
+
+* bash: `share/bash-completion/completions/baldr`, loaded by bash-completion on
+  first use. Without bash-completion, source the file from `~/.bashrc`.
+* zsh: `share/zsh/site-functions/_baldr`. The directory has to be on `$fpath`
+  before `compinit` runs; the installer prints the line for `.zshrc` if it
+  finds no mention of it there.
 
 == Compile commands
 

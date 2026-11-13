@@ -7,7 +7,11 @@ Example commands:
 ```sh
 baldr build
 baldr run -t <target>
+baldr targets
 ```
+
+The installer offers shell completion for bash and zsh, which completes the
+targets of `-t` too. See the user guide in `doc` for setting it up by hand.
 
 For a clean, end-to-end verification, use `ci/e2e.sh`. It copies the content of
 the repository in `/tmp/workspace/baldr`, cleans the untracked content, and

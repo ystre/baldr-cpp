@@ -1,0 +1,65 @@
+#compdef baldr
+#
+# Zsh completion of Baldr: commands, options and the targets of -t/--target.
+
+# The targets of the project, read with `baldr targets`, described by their
+# type. `run` gets the executables only. Uses `line` and `opt_args` of
+# `_arguments` in `_baldr`.
+_baldr_targets() {
+    local -a project_opts targets
+    local opt entry type
+
+    for opt in -p --project -b --build-type --build-dir; do
+        if (( ${+opt_args[$opt]} )); then
+            project_opts+=("$opt" "${${(Q)opt_args[$opt]}/#\~/$HOME}")
+        fi
+    done
+
+    for entry in "${(@f)$(baldr "${project_opts[@]}" targets 2>/dev/null)}"; do
+        [[ -n "$entry" ]] || continue
+        type="${entry#*$'\t'}"
+        if [[ "${line[1]}" == run && "$type" != executable ]]; then
+            continue
+        fi
+        targets+=("${${entry%%$'\t'*}//:/\\:}:$type")
+    done
+
+    _describe -t targets 'target' targets
+}
+
+_baldr() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    local -a commands=(
+        'build:configure (if needed) and build the project'
+        'run:build (if needed) and run a target'
+        'targets:list the buildable targets'
+    )
+
+    _arguments -C -S \
+        '(- 1)'{-h,--help}'[produce help message]' \
+        '(- 1)'{-v,--version}'[print version and exit]' \
+        '(-p --project)'{-p+,--project=}'[project directory]:directory:_files -/' \
+        '(-b --build-type)'{-b+,--build-type=}'[CMake build type]:build type:(Debug Release RelWithDebInfo MinSizeRel)' \
+        '--build-dir=[override the default build directory]:directory:_files -/' \
+        '--clean[wipe the build directory before building]' \
+        '*'{-D+,--cmake-define=}'[CMake define]:define (KEY=VALUE):' \
+        '(-t --target)'{-t+,--target=}'[target to build, or executable to run]:target:_baldr_targets' \
+        '--build[build the project first]' \
+        '--debug[run the target under the configured debugger]' \
+        '(-i --image)'{-i+,--image=}'[Docker image to build or run in]:image:' \
+        '1:command:->command'
+
+    case "$state" in
+        command)
+            _describe -t commands 'command' commands
+            ;;
+    esac
+}
+
+if [[ "${zsh_eval_context[-1]}" == loadautofunc ]]; then
+    _baldr "$@"
+else
+    compdef _baldr baldr
+fi
