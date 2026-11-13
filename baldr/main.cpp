@@ -5,7 +5,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-07
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    read
  * SPDX-License-Identifier: BSL-1.0
@@ -26,6 +26,7 @@
 #include <boost/program_options.hpp>
 
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include <unistd.h>
 
@@ -501,6 +502,8 @@ auto entrypoint(arg_range auto args) -> int {
     }
 
     if (utl::signal_handler::triggered(SIGINT)) {
+        utl::log::failure("Interrupted.");
+        spdlog::shutdown();
         sigint.reraise_default();
     }
 

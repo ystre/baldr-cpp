@@ -7,7 +7,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-08-11
- * @updated     2026-11-06
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    skimmed
  * SPDX-License-Identifier: BSL-1.0
@@ -28,10 +28,6 @@ namespace baldr {
 /**
  * @brief   Run `args` inside `working_directory`, logging its combined
  *          stdout/stderr output line by line at the `classify()`d level.
- *
- * Registers the spawned child with `signal_handler::watch()` for `SIGINT`
- * for the duration of the run (see `baldr/signal.hpp`), so repeated Ctrl-C
- * still takes it down even if it's ignoring/outliving the signal itself.
  *
  * `utl::log::child_env()` is added to the child's environment where `env`
  * doesn't set the same variables, so a nested `baldr` streams plain lines

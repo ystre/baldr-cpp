@@ -8,7 +8,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-08-06
- * @updated     2026-09-19
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    read
  * SPDX-License-Identifier: BSL-1.0
@@ -123,6 +123,15 @@ enum class escalation_action : std::uint8_t {
 };
 
 /**
+ * @brief   Whether `signal_handler` passes each delivery on to a watched
+ *          child before the escalation fires.
+ */
+enum class forward_e : std::uint8_t {
+    none,
+    group,
+};
+
+/**
  * @brief   A reusable "count deliveries, escalate after N" signal-handler
  *          policy, installable via `signal_guard`
  *          (`signal_guard{ signum, &signal_handler::handle }`).
@@ -143,8 +152,12 @@ public:
      * @brief   The handler function to install via `signal_guard`, e.g.
      *          `signal_guard{ SIGINT, &signal_handler::handle }`.
      *
-     * Async-signal-safe: only touches `volatile` scalars and, once the
-     * configured threshold is reached, calls `kill()`/`abort()`.
+     * Below the configured threshold, a delivery is forwarded to the watched
+     * process group (if any); from the threshold on, the escalation fires
+     * instead.
+     *
+     * Async-signal-safe: only touches `volatile` scalars and calls
+     * `kill()`/`abort()`.
      */
     static void handle(int signum) {
         auto idx = static_cast<std::size_t>(signum);
@@ -152,7 +165,10 @@ public:
         s_flags[idx] = count;
 
         if (auto after = s_after[idx]; after > 0 && count >= after) {
+            kill_group(s_forward[idx], SIGKILL);
             dispatch(s_action[idx], s_target[idx]);
+        } else {
+            kill_group(s_forward[idx], signum);
         }
     }
 
@@ -188,6 +204,7 @@ public:
      */
     static void disarm(int signum) {
         auto idx = static_cast<std::size_t>(signum);
+        s_forward[idx] = 0;
         s_action[idx] = escalation_action::none;
         s_after[idx] = 0;
         s_target[idx] = -1;
@@ -200,10 +217,14 @@ public:
      *          ignoring/outliving the signal still gets taken down instead
      *          of being abandoned as an orphan.
      *
+     * With `forward_e::group`, each earlier delivery is passed on to `pid`'s
+     * process group, so the child can stop gracefully first.
+     *
      * Prefer `scoped_watch` over calling this directly.
      */
-    static void watch(int signum, pid_t pid, int force_kill_after = ForceKillAfter) {
+    static void watch(int signum, pid_t pid, forward_e forward = forward_e::none, int force_kill_after = ForceKillAfter) {
         escalate(signum, escalation_action::kill_pid, force_kill_after, pid);
+        s_forward[static_cast<std::size_t>(signum)] = forward == forward_e::group ? pid : 0;
     }
 
     /**
@@ -222,10 +243,10 @@ public:
      */
     class scoped_watch {
     public:
-        scoped_watch(int signum, pid_t pid, int force_kill_after = ForceKillAfter)
+        scoped_watch(int signum, pid_t pid, forward_e forward = forward_e::none, int force_kill_after = ForceKillAfter)
             : m_signum(signum)
         {
-            signal_handler::watch(m_signum, pid, force_kill_after);
+            signal_handler::watch(m_signum, pid, forward, force_kill_after);
         }
 
         ~scoped_watch() {
@@ -244,6 +265,7 @@ public:
 private:
     static inline std::array<volatile sig_atomic_t, NSIG> s_flags{};
     static inline std::array<volatile pid_t, NSIG> s_target{};
+    static inline std::array<volatile pid_t, NSIG> s_forward{};
     static inline std::array<volatile int, NSIG> s_after{};
     static inline std::array<volatile escalation_action, NSIG> s_action{};
 
@@ -265,6 +287,13 @@ private:
                 break;
         }
     }
+
+    static void kill_group(pid_t group, int signum) {
+        if (group > 0) {
+            kill(-group, signum);
+        }
+    }
+
 };
 
 } // namespace utl
