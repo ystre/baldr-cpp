@@ -5,13 +5,14 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    read
  * SPDX-License-Identifier: BSL-1.0
  */
 
 #include <baldr/builder.hpp>
+#include <baldr/codemodel.hpp>
 #include <baldr/exec.hpp>
 
 #include <libutl/command.hpp>
@@ -302,20 +303,30 @@ builder::handle_cmake_project(const std::string& target, bool clean_build) const
         fs::remove_all(build_dir);
     }
 
-    auto conan_provider = resolve_conan_provider();
-    auto resolved_defines = serialize_defines(m_cmake_defines, m_cmake_env, conan_provider);
-
-    if (needs_cmake_configure(build_dir, resolved_defines)) {
-        configure_cmake(build_dir, build_dir_rel, resolved_defines, conan_provider);
-    }
-
-    link_compile_commands(m_project_dir, m_build_type, build_dir);
+    ensure_cmake_configured(build_dir, build_dir_rel);
 
     if (target.empty()) {
         return { "cmake", "--build", build_dir_rel };
     }
 
     return { "cmake", "--build", build_dir_rel, "--target", target };
+}
+
+/**
+ * @brief   (Re-)configure `build_dir` if `needs_cmake_configure()` says so,
+ *          or `force` is set, then keep `compile_commands.json` symlinked.
+ *
+ * @throws  nova::exception if the configure command fails.
+ */
+void builder::ensure_cmake_configured(const fs::path& build_dir, const std::string& build_dir_rel, bool force) const {
+    auto conan_provider = resolve_conan_provider();
+    auto resolved_defines = serialize_defines(m_cmake_defines, m_cmake_env, conan_provider);
+
+    if (force or needs_cmake_configure(build_dir, resolved_defines)) {
+        configure_cmake(build_dir, build_dir_rel, resolved_defines, conan_provider);
+    }
+
+    link_compile_commands(m_project_dir, m_build_type, build_dir);
 }
 
 /**
@@ -358,6 +369,8 @@ void builder::configure_cmake(
         nova::log::debug("Discovered Conan project, injecting CMAKE_PROJECT_TOP_LEVEL_INCLUDES=`{}`", *conan_provider);
         configure_cmd.push_back(fmt::format("-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={}", *conan_provider));
     }
+
+    request_codemodel(build_dir);
 
     if (auto status = run_streamed(configure_cmd, m_project_dir, m_classifier_rules, m_cmake_env); not status.success()) {
         if (status.interrupted()) {
@@ -514,6 +527,27 @@ builder::resolve_executable(const std::string& target) const -> std::string {
     argv.insert(argv.end(), forwarded_args.begin(), forwarded_args.end());
 
     return argv;
+}
+
+auto builder::targets() -> std::vector<target_t> {
+    discover_project_type();
+
+    if (m_project_type != project_type::cmake) {
+        nova::log::warn("Listing targets is only supported for CMake projects");
+        return { };
+    }
+
+    const auto build_dir_rel = effective_build_dir_rel();
+    const auto build_dir = fs::path(m_project_dir) / build_dir_rel;
+
+    ensure_cmake_configured(build_dir, build_dir_rel, /*force=*/ request_codemodel(build_dir));
+
+    auto ret = read_codemodel(build_dir, m_build_type);
+    if (not ret) {
+        throw nova::exception("CMake wrote no code model to `{}`", build_dir.string());
+    }
+
+    return std::move(*ret);
 }
 
 void builder::run(const std::string& target, const std::vector<std::string>& forwarded_args, bool debug) {

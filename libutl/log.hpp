@@ -5,7 +5,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    read
  * SPDX-License-Identifier: BSL-1.0
@@ -243,6 +243,12 @@ private:
  *                  mutating the process-wide environment.
  */
 [[nodiscard]] auto resolve(const std::string& name, const env_lookup& getenv) -> settings_t;
+
+/**
+ * @brief   Resolve the settings of the logger `name` from the process
+ *          environment, see the overload above.
+ */
+[[nodiscard]] auto resolve(const std::string& name) -> settings_t;
 
 /**
  * @brief   Initialize the default spdlog logger `name` with `resolve()`d

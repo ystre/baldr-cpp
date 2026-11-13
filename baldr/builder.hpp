@@ -5,7 +5,7 @@
  *
  * @author      Gábor Krisztián Girhiny
  * @created     2026-07-12
- * @updated     2026-11-06
+ * @updated     2026-11-13
  * @status      evolving
  * @reviewed    read
  * SPDX-License-Identifier: BSL-1.0
@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <baldr/codemodel.hpp>
 #include <baldr/config.hpp>
 
 #include <filesystem>
@@ -81,6 +82,17 @@ public:
      */
     void run(const std::string& target, const std::vector<std::string>& forwarded_args = {}, bool debug = false);
 
+    /**
+     * @brief   The buildable targets of the project, sorted by name.
+     *
+     * Configures a CMake project first if needed, like `build()`. A Makefile
+     * project has no target listing, so it has no targets.
+     *
+     * @throws  nova::exception if configuring fails or CMake's reply is
+     *          malformed.
+     */
+    [[nodiscard]] auto targets() -> std::vector<target_t>;
+
 private:
     std::string m_project_dir;
     std::string m_build_type;
@@ -100,6 +112,12 @@ private:
     [[nodiscard]] auto resolve_executable(const std::string& target) const -> std::string;
     [[nodiscard]] auto handle_makefile_project(bool clean_build) const -> std::vector<std::string>;
     [[nodiscard]] auto handle_cmake_project(const std::string& target, bool clean_build) const -> std::vector<std::string>;
+
+    void ensure_cmake_configured(
+        const std::filesystem::path& build_dir,
+        const std::string& build_dir_rel,
+        bool force = false
+    ) const;
 
     void configure_cmake(
         const std::filesystem::path& build_dir,
